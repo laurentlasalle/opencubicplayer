@@ -1,0 +1,56 @@
+name: Windows x64 build
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      WORK: ${{ github.workspace }}/../work
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake autoconf automake libtool pkg-config xa65 bsdextrautils zip unzip xz-utils python3
+
+      - name: Cache toolchain and dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/../work/tc
+            ${{ github.workspace }}/../work/src
+            ${{ github.workspace }}/../work/prefix
+          key: deps-${{ hashFiles('windows/config.sh', 'windows/fetch-sources.sh', 'windows/build-deps.sh') }}
+
+      - name: Fetch sources
+        run: windows/fetch-sources.sh
+
+      - name: Build dependencies
+        run: windows/build-deps.sh
+
+      - name: Build OCP
+        run: windows/build-ocp.sh
+
+      - name: Package
+        id: package
+        run: echo "zip=$(windows/package.sh | tail -1)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ocp-win64
+          path: ${{ steps.package.outputs.zip }}
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.package.outputs.zip }}
