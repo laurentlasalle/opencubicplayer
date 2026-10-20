@@ -8,7 +8,7 @@ LLVM_MINGW=llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64
 
 # game-music-emu with the OCP visualisation API (gme_vis_enable / gme_vis_read)
 GME_REPO=${GME_REPO:-https://github.com/laurentlasalle/game-music-emu}
-GME_REF=${GME_REF:-d721d5acdcbb49e6e7276b9c819a292e57609fe3}   # commit of the "ocp" branch
+GME_REF=${GME_REF:-e484e836d877be0e4063a57f33a721545b59d96d}   # commit of the "ocp" branch
 
 SRC=$WORK/src
 TC=$WORK/tc/$LLVM_MINGW
