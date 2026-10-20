@@ -57,6 +57,7 @@
 #include "types.h"
 
 #include "psetting.h"
+#include "stuff/milestone.h"
 #include "plinkman.h"
 
 #include "stuff/compat.h"
@@ -161,6 +162,7 @@ static int _lnkDoLoad(char *file)
 			return -1;
 		}
 
+		ocp_milestone ("loading %s", file);
 		if (!(handle=LoadLibraryW(wfile)))
 		{
 			char *lpMsgBuf = NULL;
@@ -584,12 +586,18 @@ int lnkInitAll (void)
 
 	for (i=0;i<loadlist_n;i++)
 		if (loadlist[i].info->PreInit)
+		{
+			ocp_milestone ("PreInit %s", loadlist[i].info->name);
 			if (loadlist[i].info->PreInit(&configAPI)<0)
 				return 1;
+		}
 	for (i=0;i<loadlist_n;i++)
 		if (loadlist[i].info->Init)
+		{
+			ocp_milestone ("Init %s", loadlist[i].info->name);
 			if (loadlist[i].info->Init(&configAPI)<0)
 				return 1;
+		}
 	return 0;
 }
 
@@ -599,13 +607,20 @@ int lnkPluginInitAll (struct PluginInitAPI_t *API)
 
 	for (i=0;i<loadlist_n;i++)
 		if (loadlist[i].info->PluginInit)
+		{
+			ocp_milestone ("PluginInit %s", loadlist[i].info->name);
 			if (loadlist[i].info->PluginInit(API)<0)
 				return 1;
+		}
 
 	for (i=0;i<loadlist_n;i++)
 		if (loadlist[i].info->LateInit)
+		{
+			ocp_milestone ("LateInit %s", loadlist[i].info->name);
 			if (loadlist[i].info->LateInit(API)<0)
 				return 1;
+		}
+	ocp_milestone ("plugins initialized");
 
 	return 0;
 }

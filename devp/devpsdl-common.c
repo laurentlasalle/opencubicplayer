@@ -323,7 +323,9 @@ static int devpSDLPlay (uint32_t *rate, enum plrRequestFormat *format, struct oc
 	lastLength = 0;
 
 #if SDL_VERSION_ATLEAST(3,2,0)
+	ocp_milestone ("[SDL] opening audio output (%u Hz)", (unsigned)spec.freq);
 	stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, MyNewAudioCallback, NULL);
+	ocp_milestone ("[SDL] sortie audio %s", stream ? "open" : "failed");
 	if (!stream)
 	{
 		SDL_DestroyMutex (audiolock);

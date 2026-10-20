@@ -148,8 +148,12 @@ OCP_OBJECTS+=boot/kickload.o
 ifeq ($(WINDOWS),1)
 OCP_OBJECTS+=boot/utf-8.o boot/utf-16.o
 endif
+ifeq ($(WINDOWS),1)
+# GUI application on Windows: no console window. stderr goes to %APPDATA%\OpenCubicPlayer\ocp-log.txt (see boot/kickload-windows.c)
+OCP_EXE_LDFLAGS=-Wl,--subsystem,windows -Wl,-e,mainCRTStartup
+endif
 ocp$(EXE_SUFFIX): boot
-	$(CC) $(LDFLAGS) -o $@ $(OCP_OBJECTS) @DL_LIBS@ @EFENCE_LIBS@ @DUMA_LIBS@
+	$(CC) $(LDFLAGS) $(OCP_EXE_LDFLAGS) -o $@ $(OCP_OBJECTS) @DL_LIBS@ @EFENCE_LIBS@ @DUMA_LIBS@
 ifeq ($(HAIKU),1)
 	rc -o haiku/ocp.rsrc haiku/ocp.rdef
 	xres -o $@ haiku/ocp.rsrc

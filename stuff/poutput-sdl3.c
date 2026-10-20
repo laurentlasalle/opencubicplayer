@@ -42,6 +42,7 @@
 #include "stuff/poutput-keyboard.h"
 #include "stuff/poutput-sdl3.h"
 #include "stuff/poutput-swtext.h"
+#include "stuff/milestone.h"
 
 typedef enum
 {
@@ -1566,6 +1567,7 @@ static int need_quit = 0;
 
 int sdl3_init(void)
 {
+	ocp_milestone ("[SDL] video init");
 	if (!SDL_Init(/*SDL_INIT_AUDIO|*/SDL_INIT_VIDEO))
 	{
 		fprintf(stderr, "[SDL3-video] Unable to init SDL: %s\n", SDL_GetError());
@@ -1573,11 +1575,13 @@ int sdl3_init(void)
 		return 1;
 	}
 
+	ocp_milestone ("[SDL] video ok, loading fonts");
 	if (fontengine_init())
 	{
 		SDL_Quit();
 		return 1;
 	}
+	ocp_milestone ("[SDL] fonts ok, test window");
 
 	/* we now test-spawn one window, and so we can fallback to other drivers */
 	current_window = SDL_CreateWindow ("Open Cubic Player detection",

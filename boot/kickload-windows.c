@@ -57,6 +57,8 @@
 #include "boot/console.h"
 #include "stuff/poutput.h"
 #include "stuff/utf-16.h"
+#include "stuff/milestone.h"
+#include <wchar.h>
 
 static char *_cfConfigHomePath;
 static char *_cfDataHomePath;
@@ -462,6 +464,7 @@ static int runocp (int argc, char *argv[])
 	HMODULE handle;
 	struct bootupstruct *bootup;
 
+	ocp_milestone ("loading libocp" LIB_SUFFIX);
 	handle = LoadLibraryW (L"libocp" LIB_SUFFIX);
 	if (!handle)
 	{
@@ -521,7 +524,54 @@ static int runocp (int argc, char *argv[])
 	free (wcfDataPath);
 	free (wcfProgramPath);
 
+	ocp_milestone ("libocp loaded, starting");
 	return bootup->main(argc, argv, _cfHomePath, _cfConfigHomePath, _cfDataHomePath, _cfDataPath, _cfProgramPath);
+}
+
+/* ocp.exe is a GUI application: when stderr is not redirected by the caller,
+ * send stderr/stdout to %APPDATA%\OpenCubicPlayer\ocp-log.txt, keeping the
+ * previous run as ocp-log-previous.txt */
+static void setup_logfile (const uint16_t *appdata)
+{
+	HANDLE h = GetStdHandle (STD_ERROR_HANDLE);
+	uint16_t dir[MAX_PATH + 64], logname[MAX_PATH + 64], prevname[MAX_PATH + 64];
+	size_t l;
+	int second_instance = 0;
+
+	if (h && (h != INVALID_HANDLE_VALUE) && (GetFileType (h) != FILE_TYPE_UNKNOWN))
+	{
+		return; /* already redirected (or attached to a console) by the caller */
+	}
+	l = wcslen ((const wchar_t *)appdata);
+	if (l + 40 > MAX_PATH)
+	{
+		return;
+	}
+	swprintf ((wchar_t *)dir, MAX_PATH + 64, L"%ls%lsOpenCubicPlayer", (const wchar_t *)appdata, (l && appdata[l-1] == '\\') ? L"" : L"\\");
+	CreateDirectoryW ((const wchar_t *)dir, 0);
+	swprintf ((wchar_t *)logname,  MAX_PATH + 64, L"%ls\\ocp-log.txt", (const wchar_t *)dir);
+	swprintf ((wchar_t *)prevname, MAX_PATH + 64, L"%ls\\ocp-log-previous.txt", (const wchar_t *)dir);
+	if (!MoveFileExW ((const wchar_t *)logname, (const wchar_t *)prevname, MOVEFILE_REPLACE_EXISTING))
+	{
+		DWORD e = GetLastError ();
+		if ((e == ERROR_SHARING_VIOLATION) || (e == ERROR_ACCESS_DENIED) || (e == ERROR_LOCK_VIOLATION))
+		{
+			/* ocp-log.txt is still open: another OCP instance is running. Do not overwrite its log. */
+			swprintf ((wchar_t *)logname, MAX_PATH + 64, L"%ls\\ocp-log-second-instance.txt", (const wchar_t *)dir);
+			second_instance = 1;
+		}
+	}
+	if (_wfreopen ((const wchar_t *)logname, L"w", stderr))
+	{
+		setvbuf (stderr, 0, _IONBF, 0);
+		freopen ("NUL", "w", stdout); /* make sure stdout is a valid stream... */
+		_dup2 (_fileno (stderr), _fileno (stdout)); /* ...that ends up in the same log */
+		setvbuf (stdout, 0, _IONBF, 0);
+		if (second_instance)
+		{
+			fprintf (stderr, "WARNING: ocp-log.txt is still open, another OCP instance seems to be running already.\n");
+		}
+	}
 }
 
 int main(int argc, char *argv[])
@@ -531,13 +581,23 @@ int main(int argc, char *argv[])
 	uint16_t wt[32767+1]; /* SHGetFolderPathW requires MAX_PATH, GetEnvironmentVariableW can require 32767+1 */
 	DWORD r;
 
-	SetConsoleOutputCP(CP_UTF8);
+	wt[0] = 0;
+	if (SHGetFolderPathW (NULL, CSIDL_APPDATA, NULL, 0, wt) == S_OK)
+	{
+		setup_logfile (wt);
+	}
+	ocp_milestone ("Open Cubic Player " PACKAGE_VERSION " - start");
+
+	if (GetConsoleWindow ())
+	{
+		SetConsoleOutputCP(CP_UTF8);
+	}
 
 #ifdef HAVE_DUMA
 	DUMA_newFrame();
 #endif
 
-	if (!SetConsoleOutputCP(CP_UTF8))
+	if (GetConsoleWindow () && !SetConsoleOutputCP(CP_UTF8))
 	{
 		char *lpMsgBuf = NULL;
 		if (FormatMessage (
@@ -706,6 +766,7 @@ int main(int argc, char *argv[])
 		return -1;
 
 	retval = runocp (argc, argv);
+	ocp_milestone ("normal exit (code %d)", retval);
 	free (_cfConfigHomePath);
 	free (_cfDataHomePath);
 	free (_cfHomePath);

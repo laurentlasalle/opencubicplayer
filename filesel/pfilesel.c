@@ -95,6 +95,7 @@
 #include "modlist.h"
 #include "musicbrainz.h"
 #include "pfilesel.h"
+#include "stuff/milestone.h"
 #include "stuff/compat.h"
 #include "stuff/file.h"
 #include "stuff/framelock.h"
@@ -3836,6 +3837,7 @@ static void fsDraw(void)
 
 signed int fsFileSelect(void)
 {
+	static int fsFileSelect_first = 1;
 	int state = 0;
 	/* state = 0 - Idle
 	 * state = 1 - fsEditFileInfo()
@@ -3846,12 +3848,23 @@ signed int fsFileSelect(void)
 	 */
 	unsigned long i;
 
+	if (fsFileSelect_first)
+	{
+		fsFileSelect_first = 0;
+		ocp_milestone ("file browser");
+	}
+
 	if (!currentdir->num)
 	{ /* this is true the very first time we execute */
 		fsScanDir(0);
 	} else if (fsFileSelect_ForceRescan)
 	{
 		fsScanDir(1);
+	}
+	if (fsFileSelect_first == 0)
+	{
+		fsFileSelect_first = -1;
+		ocp_milestone ("directory read (%u entries)", (unsigned)currentdir->num);
 	}
 
 	plSetTextMode(plScrType);

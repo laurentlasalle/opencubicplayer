@@ -53,6 +53,7 @@
 #include "types.h"
 
 #include "pmain.h"
+#include "stuff/milestone.h"
 #include "stuff/err.h"
 #include "stuff/framelock.h"
 #include "stuff/poutput.h"
@@ -1173,6 +1174,7 @@ static int init_modules(int argc, char *argv[]
 	lnkLink(cfGetProfileString2(cfConfigSec, "defaultconfig", "prelink", ""));
 	lnkLink(cfGetProfileString("general", "prelink", ""));
 
+	ocp_milestone ("configuration read, loading plugins (%s)", cfProgramPathAutoload);
 	if (lnkLinkDir(cfProgramPathAutoload)<0)
 	{
 		fprintf(stderr, "could not autoload directory: %s\n", cfProgramPathAutoload);
@@ -1203,6 +1205,7 @@ static int init_modules(int argc, char *argv[]
 		fprintf(stderr, "ERROR - No main specified in libraries\n");
 		return errGen;
 	}
+	ocp_milestone ("starting the user interface");
 	if (ocpmain->main(argc, argv)<0)
 		return errGen;
 

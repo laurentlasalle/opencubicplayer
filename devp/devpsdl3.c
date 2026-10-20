@@ -41,6 +41,7 @@
 #include "dev/player.h"
 #include "dev/ringbuffer.h"
 #include "stuff/err.h"
+#include "stuff/milestone.h"
 #include "stuff/imsrtns.h"
 
 #ifdef SDL3_DEBUG
@@ -56,6 +57,7 @@ static const struct plrDevAPI_t *sdlInit (const struct plrDriver_t *driver, cons
 	plrDriverAPI = DriverAPI;
 
 	PRINT("%s()\n", __FUNCTION__);
+	ocp_milestone ("[SDL] audio init");
 	if (!SDL_InitSubSystem(SDL_INIT_AUDIO))
 	{
 		fprintf(stderr, "[SDL] SDL_InitSubSystem (SDL_INIT_AUDIO) failed: %s\n", SDL_GetError());
