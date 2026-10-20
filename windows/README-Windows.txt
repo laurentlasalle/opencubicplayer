@@ -144,7 +144,7 @@ If ocp.exe reports that VCRUNTIME140.dll is missing, install the
 Release history
 ---------------
 Omni v1 to v6 were distributed as "3.5.1" to "3.5.6".
-Omni v8 (3.5.0-omni.8)
+Omni v8 (3.5.0-omni.8, 2026-10-20)
  - Tracker view: the upcoming rows are filled in advance (a second, silent
    emulator runs a few seconds ahead of the audio)
  - Channel names in the column header of the tracker view, shorter title
