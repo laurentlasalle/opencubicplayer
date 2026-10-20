@@ -19,7 +19,7 @@ jobs:
       contents: write
     env:
       WORK: ${{ github.workspace }}/.work
-      VERSION_SUFFIX: ${{ github.event_name == 'push' && '-test4' || github.event.inputs.suffix }}
+      VERSION_SUFFIX: ${{ github.event_name == 'push' && '-test5' || github.event.inputs.suffix }}
       HOMEBREW_NO_AUTO_UPDATE: 1
       HOMEBREW_NO_INSTALL_CLEANUP: 1
       HOMEBREW_NO_EMOJI: 1
