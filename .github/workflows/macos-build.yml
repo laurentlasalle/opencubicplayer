@@ -3,6 +3,8 @@ name: macOS build
 on:
   release:
     types: [published]    # publish a release (tag v<upstream>-omni.<n>) on GitHub to build and attach the zip
+  push:
+    branches: [dev]       # test builds of the dev branch (suffix set in VERSION_SUFFIX below)
   workflow_dispatch:      # manual build, zip available as an artifact
     inputs:
       suffix:
@@ -17,7 +19,7 @@ jobs:
       contents: write
     env:
       WORK: ${{ github.workspace }}/.work
-      VERSION_SUFFIX: ${{ github.event.inputs.suffix }}
+      VERSION_SUFFIX: ${{ github.event_name == 'push' && '-test4' || github.event.inputs.suffix }}
       HOMEBREW_NO_AUTO_UPDATE: 1
       HOMEBREW_NO_INSTALL_CLEANUP: 1
     steps:
