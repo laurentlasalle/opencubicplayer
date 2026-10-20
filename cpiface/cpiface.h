@@ -189,6 +189,7 @@ struct cpitrakdisplaystruct
 
 extern void cpiTrkSetup  (struct cpifaceSessionAPI_t *cpifaceSession, const struct cpitrakdisplaystruct *c, int npat);
 extern void cpiTrkSetup2 (struct cpifaceSessionAPI_t *cpifaceSession, const struct cpitrakdisplaystruct *c, int npat, int tracks);
+extern void cpiTrkStretch (struct cpifaceSessionAPI_t *cpifaceSession, int enable);
 
 extern char plCompoMode;
 
@@ -288,6 +289,7 @@ struct cpifaceSessionAPI_t
 	void (*UseMessage) (char **msg);
 	void (*TrackSetup)  (struct cpifaceSessionAPI_t *cpifaceSession, const struct cpitrakdisplaystruct *c, int npat);
 	void (*TrackSetup2) (struct cpifaceSessionAPI_t *cpifaceSession, const struct cpitrakdisplaystruct *c, int npat, int tracks);
+	void (*TrackStretch) (struct cpifaceSessionAPI_t *cpifaceSession, int enable); /* call after TrackSetup*(): the default track view spreads the channels over the full width (note, ins, vol, fx) */
 
 	void (*KeyHelp) (uint16_t key, const char *shorthelp); /* Called on ALT-K to issue help about each keyboard shortcut */
 	void (*KeyHelpClear) (void); /* Clears the current keyboard shortcut list, only used by keyboard/display loops */

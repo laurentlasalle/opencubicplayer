@@ -2362,6 +2362,7 @@ static int plmpOpenFile(struct moduleinfostruct *info, struct ocpfilehandle_t *f
 	cpifaceSessionAPI.Public.UseMessage = plUseMessage;
 	cpifaceSessionAPI.Public.TrackSetup = cpiTrkSetup;
 	cpifaceSessionAPI.Public.TrackSetup2 = cpiTrkSetup2;
+	cpifaceSessionAPI.Public.TrackStretch = cpiTrkStretch;
 
 	cpifaceSessionAPI.Public.KeyHelp        = cpiKeyHelp;
 	cpifaceSessionAPI.Public.KeyHelpClear   = cpiKeyHelpClear;

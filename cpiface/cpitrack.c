@@ -94,6 +94,10 @@ static int patwidth, patpad;
 #warning Make a better API for this
 static int overrideplNLChan;
 
+/* stretch mode: the default view (plPatType == plPatTypeAuto) spreads the channels over the full width */
+static int plTrackStretch;
+static signed int plPatTypeAuto = -1;
+
 enum
 {
 	cpiTrkFXIns=1,cpiTrkFXNote=2,cpiTrkFXVol=4,cpiTrkFXNoPan=8
@@ -550,6 +554,147 @@ static void calcPatType(void)
 	}
 
 	plPatType=Probes[i].PatType;
+	plPatTypeAuto=plPatType;
+}
+
+/* columns per channel in stretch mode, 0 if the channels do not fit in a cell of at least 9 characters */
+static int stretchwidth (void)
+{
+	int w;
+	if (!plTrackStretch || (plPatType != plPatTypeAuto) || (overrideplNLChan <= 0))
+	{
+		return 0;
+	}
+	w = (plPatWidth - 4 - 4) / overrideplNLChan; /* row number + separator on both sides */
+	return (w >= 9) ? w : 0; /* smallest cell: "C-4 02 F" + separator */
+}
+
+/* channel cell, centered in the column (the last character of the column is the separator):
+ *   "C-4 02 0F x" 11 characters, x = getfx()
+ *   "C-4 02 0F"    9 characters
+ *   "C-4 02 F"     8 characters, only the last digit of the volume (enough for volumes 0-F)
+ */
+static void preparepatstretch (struct cpifaceSessionAPI_t *cpifaceSession, int pat, int colw)
+{
+	int i;
+	int chnn = overrideplNLChan;
+	int cellw = (colw >= 12) ? 11 : (colw >= 10) ? 9 : 8;
+	int off = (colw - 1 - cellw + 1) / 2; /* last character of the column is the separator */
+	const char *pname;
+	uint16_t patmask[CONSOLE_MAX_X];
+	int firstrow=20;
+	int firstprow=0;
+	int firstpat;
+	const int p0 = 4;
+
+	plPrepdPat=pat;
+
+	pname = getpatname (cpifaceSession, pat);
+	snprintf (pattitle1, sizeof (pattitle1), "   pattern view:  order %03X, %2d channels,  %s%s%s", pat, chnn, (cellw == 11) ? "(note, ins, vol, slide)" : "(note, ins, vol)", (pname&&*pname)?": ":"", (pname&&*pname)?pname:"");
+
+	patwidth = p0 + colw * chnn + 4; /* separator, blank (marker), row number, blank */
+	patpad = (plPatWidth - patwidth) >= 0;
+
+	writestring(pattitle2, 0, COLTITLE2, "row", CONSOLE_MAX_X);
+	if (patpad)
+		writestring(pattitle2, patwidth-4, COLTITLE2, "row", 3);
+
+	writestring(patmask, 0, COLLNUM, "00 ", CONSOLE_MAX_X);
+	writestring(patmask, 3, COLBACK, "\xba", 1);
+	if (patpad)
+		writestring(patmask, patwidth-3, COLLNUM, "00", 2);
+
+	for (i=0; i<chnn; i++)
+	{
+		uint8_t chpaus = cpifaceSession->MuteChannel[i];
+		uint8_t sel = (i==cpifaceSession->SelectedChannel);
+		writenum(pattitle2, p0 + colw * i + off + cellw / 2 - 1, sel?COLTITLE2H:chpaus?COLTITLE2M:COLLNUM, i+1, 10, 2, 1);
+		writestring(patmask, p0 + colw * i, COLBACK, "", colw - 1);
+		writestring(patmask, p0 + colw * i + colw - 1, COLBACK, (i == (chnn - 1)) ? "\xba" : "\xb3", 1);
+	}
+
+	firstpat=pat;
+	while (firstpat)
+	{
+		firstpat--;
+		firstrow -= getpatlen (cpifaceSession, firstpat);
+		if (firstrow<=0)
+		{
+			firstprow-=firstrow;
+			firstrow=0;
+			break;
+		}
+	}
+	for (i=0; i<firstrow; i++)
+		writestring(plPatBuf[i], 0, COLBACK, "", CONSOLE_MAX_X);
+
+	while (firstpat<plPatternNum)
+	{
+		int curlen;
+		int lastprow;
+
+		if (!(curlen = getpatlen (cpifaceSession, firstpat)))
+		{
+			firstpat++;
+			continue;
+		}
+		lastprow=curlen;
+		if ((firstrow+curlen-firstprow)>=plPatBufH)
+		{
+			lastprow=plPatBufH-firstrow-firstprow-1;
+		}
+
+		for (i=firstprow; i<lastprow; i++)
+		{
+			writestringattr(plPatBuf[i+firstrow-firstprow], 0, patmask, CONSOLE_MAX_X);
+			writenum(plPatBuf[i+firstrow-firstprow], 0, i?COLLNUM:COLHLNUM, i, 16, 2, 0);
+			if (patpad)
+				writenum(plPatBuf[i+firstrow-firstprow], patwidth-3, i?COLLNUM:COLHLNUM, i, 16, 2, 0);
+		}
+
+		for (i=0; i<chnn; i++)
+		{
+			int chpaus = cpifaceSession->MuteChannel[i];
+			seektrack (cpifaceSession, firstpat, i);
+			while (1)
+			{
+				int currow = startrow (cpifaceSession);
+				if (currow==-1)
+					break;
+				if ((currow>=firstprow)&&(currow<lastprow))
+				{
+					uint16_t *bp=plPatBuf[currow+firstrow-firstprow]+p0+i*colw+off;
+					getnote (cpifaceSession, bp, 0);
+					getins  (cpifaceSession, bp + 4);
+					if (cellw == 8)
+					{
+						uint16_t v[2];
+						if (getvol (cpifaceSession, v))
+						{
+							bp[7] = v[1];
+						}
+					} else {
+						getvol  (cpifaceSession, bp + 7);
+					}
+					if (cellw == 11)
+						getfx (cpifaceSession, bp + 10, 1);
+					if (chpaus)
+						setattrgrey(bp, cellw);
+				}
+			}
+		}
+
+		firstrow+=lastprow-firstprow;
+		firstprow=0;
+		firstpat++;
+
+		if (firstrow >= (plPatBufH-1))
+		{
+			break;
+		}
+	}
+	for (i=firstrow; i<plPatBufH; i++)
+		writestring(plPatBuf[i], 0, COLBACK, "", CONSOLE_MAX_X);
 }
 
 static void TrakDraw (struct cpifaceSessionAPI_t *cpifaceSession, int focus)
@@ -580,7 +725,10 @@ static void TrakDraw (struct cpifaceSessionAPI_t *cpifaceSession, int focus)
 			pat=0;
 	}
 
-	if ((plPrepdPat!=pat) || cpifaceSession->SelectedChannelChanged)
+	if (((plPrepdPat!=pat) || cpifaceSession->SelectedChannelChanged) && stretchwidth ())
+	{
+		preparepatstretch (cpifaceSession, pat, stretchwidth ());
+	} else if ((plPrepdPat!=pat) || cpifaceSession->SelectedChannelChanged)
 	{
 		if (plPatWidth<128)
 			switch (plPatType)
@@ -857,6 +1005,7 @@ static struct cpitextmoderegstruct cpiTModeTrack = {"trak", TrakGetWin, TrakSetW
 
 void cpiTrkSetup (struct cpifaceSessionAPI_t *cpifaceSession, const struct cpitrakdisplaystruct *c, int npat)
 {
+	plTrackStretch   = 0;
 	overrideplNLChan = cpifaceSession->LogicalChannelCount;
 	plPatternNum     = npat;
 	plPatManualPat   = -1;
@@ -876,8 +1025,15 @@ void cpiTrkSetup (struct cpifaceSessionAPI_t *cpifaceSession, const struct cpitr
 	cpiTextRegisterMode (cpifaceSession, &cpiTModeTrack);
 }
 
+void cpiTrkStretch (struct cpifaceSessionAPI_t *cpifaceSession, int enable)
+{
+	plTrackStretch = enable;
+	plPrepdPat = -1;
+}
+
 void cpiTrkSetup2 (struct cpifaceSessionAPI_t *cpifaceSession, const struct cpitrakdisplaystruct *c, int npat, int tracks)
 {
+	plTrackStretch   = 0;
 	overrideplNLChan = tracks;
 	plPatternNum     = npat;
 	plPatManualPat   = -1;
