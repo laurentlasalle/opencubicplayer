@@ -96,6 +96,11 @@
   path=.
   showallfiles=off        ; Show all files in the filebrowser, or just audio/music files
 
+[gme]                     ; Game Music Emu: NSF, NSFe, GBS, GYM, HES, KSS, SAP, SPC, VGM
+  defaultlength=150       ; seconds before fade-out when the file gives no length (plain NSF...); 0 = loop forever
+  loops=2                 ; times the loop section is played, when the file gives intro/loop lengths
+  fade=8                  ; seconds of fade-out (unless the file specifies one)
+
 [libsidplayfp]
 ; emulator=residfp    to use the floating point version (CPU heavy)
 ; emulator=crSID      to use the integer version (sidlite)

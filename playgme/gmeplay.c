@@ -35,6 +35,7 @@
 #include "stuff/err.h"
 #include "stuff/imsrtns.h"
 
+#include "boot/psetting.h"
 #include "gmeplay.h"
 
 static Music_Emu *gmesession;
@@ -54,6 +55,65 @@ static uint32_t gmebuffpos; /* read fine-pos.. */
 static uint32_t gmebufrate; /* re-sampling rate.. fixed point 0x10000 => 1.0 */
 static int gmeactivetrack;
 static struct gme_info_t *gmetrackinfo;
+
+/* ocp.ini [gme] - how long a track plays before fading out and moving on */
+static int gme_cfg_loops = 2;          /* loops=       times the loop section is played, when the file gives intro/loop lengths (VGM, ...) */
+static int gme_cfg_defaultlength = 150; /* defaultlength= seconds, when the file gives no length (plain NSF, GBS, KSS, ...); 0 = forever */
+static int gme_cfg_fade = 8;            /* fade=        seconds of fade-out, unless the file specifies one */
+
+static void gmeApplyLength (void)
+{
+	long length = -1;
+	long fade;
+
+	if (!gmesession)
+	{
+		return;
+	}
+	if (gmetrackinfo)
+	{
+		if (gmetrackinfo->length > 0)
+		{
+			length = gmetrackinfo->length;
+		} else if (gmetrackinfo->loop_length > 0)
+		{
+			length = ((gmetrackinfo->intro_length > 0) ? gmetrackinfo->intro_length : 0) + (long)gme_cfg_loops * gmetrackinfo->loop_length;
+		}
+	}
+	if (length <= 0)
+	{
+		length = (long)gme_cfg_defaultlength * 1000;
+	}
+	if (length <= 0)
+	{
+		return; /* play forever (until silence is detected) */
+	}
+	fade = (gmetrackinfo && (gmetrackinfo->fade_length > 0)) ? gmetrackinfo->fade_length : (long)gme_cfg_fade * 1000;
+	gme_set_fade_msecs (gmesession, length, fade);
+}
+
+/* start a sub-song, refresh its info and apply the length/fade limit */
+static const char *gmeStartTrackInternal (int track)
+{
+	const char *result;
+
+	if ((result = gme_start_track (gmesession, gmeactivetrack = track)))
+	{
+		return result;
+	}
+	if (gmetrackinfo)
+	{
+		gme_free_info (gmetrackinfo);
+		gmetrackinfo = 0;
+	}
+	if ((result = gme_track_info (gmesession, &gmetrackinfo, gmeactivetrack)))
+	{
+		fprintf (stderr, "[GME] gme_track_info(): %s\n", result);
+		gmetrackinfo = 0;
+	}
+	gmeApplyLength ();
+	return 0;
+}
 
 #define PANPROC \
 do { \
@@ -100,25 +160,16 @@ static void gmeIdler (struct cpifaceSessionAPI_t *cpifaceSession)
 			{
 				if (doloop)
 				{
-					gme_start_track (gmesession, gmeactivetrack = 0);
+					gmeStartTrackInternal (0);
 				} else {
 					gmelooped |= 1;
 				}
 				return;
 			} else {
-				if ((result = gme_start_track (gmesession, ++gmeactivetrack)))
+				if ((result = gmeStartTrackInternal (gmeactivetrack + 1)))
 				{
 					fprintf (stderr, "[GME] gme_start_track(): %s\n", result);
 					return;
-				}
-				if (gmetrackinfo)
-				{
-					gme_free_info (gmetrackinfo);
-					gmetrackinfo = 0;
-				}
-				if ((result = gme_track_info (gmesession, &gmetrackinfo, gmeactivetrack)))
-				{
-					fprintf (stderr, "[GME] gme_track_info(): %s\n", result);
 				}
 			}
 		}
@@ -455,17 +506,22 @@ OCP_INTERNAL int gmeOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 	free (data);
 	data = 0;
 
-	if ((result = gme_start_track (gmesession, gmeactivetrack = 0)))
+	gme_cfg_loops         = cpifaceSession->configAPI->GetProfileInt ("gme", "loops",         2,   10);
+	gme_cfg_defaultlength = cpifaceSession->configAPI->GetProfileInt ("gme", "defaultlength", 150, 10);
+	gme_cfg_fade          = cpifaceSession->configAPI->GetProfileInt ("gme", "fade",          8,   10);
+	if (gme_cfg_loops < 1) gme_cfg_loops = 1;
+	if (gme_cfg_defaultlength < 0) gme_cfg_defaultlength = 0;
+	if (gme_cfg_defaultlength > 36000) gme_cfg_defaultlength = 36000;
+	if (gme_cfg_fade < 0) gme_cfg_fade = 0;
+	if (gme_cfg_fade > 60) gme_cfg_fade = 60;
+
+	if ((result = gmeStartTrackInternal (0)))
 	{
 		cpifaceSession->cpiDebug (cpifaceSession, "[GME]: %s\n", result);
 		cpifaceSession->plrDevAPI->Stop (cpifaceSession);
 		gme_delete (gmesession);
 		gmesession = 0;
 		return errFormMiss;
-	}
-	if ((result = gme_track_info (gmesession, &gmetrackinfo, gmeactivetrack)))
-	{
-		cpifaceSession->cpiDebug (cpifaceSession, "[GME] gme_track_info(): %s\n", result);
 	}
 
 	gmelooped = 0;
@@ -541,19 +597,9 @@ OCP_INTERNAL void gmeStartSong (struct cpifaceSessionAPI_t *cpifaceSession, int 
 	if (gmesession && (song >= 0) && (song < gme_track_count (gmesession)))
 	{
 		const char *result;
-		result = gme_start_track (gmesession, gmeactivetrack = song);
-		if (result)
+		if ((result = gmeStartTrackInternal (song)))
 		{
 			fprintf (stderr, "[GME] gme_start_track(): %s\n", result);
-		}
-		if (gmetrackinfo)
-		{
-			gme_free_info (gmetrackinfo);
-			gmetrackinfo = 0;
-		}
-		if ((result = gme_track_info (gmesession, &gmetrackinfo, gmeactivetrack)))
-		{
-			fprintf (stderr, "[GME] gme_track_info(): %s\n", result);
 		}
 	}
 }

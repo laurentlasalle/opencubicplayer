@@ -106,7 +106,7 @@ static int gmeProcessKey (struct cpifaceSessionAPI_t *cpifaceSession, uint16_t k
 		case '<':
 		case KEY_CTRL_LEFT: /* curses.h can't do these */
 			csg=globinfo.track-1;
-			if (csg)
+			if (csg >= 0)
 			{
 				gmeStartSong (cpifaceSession, csg);
 				cpifaceSession->ResetSongTimer (cpifaceSession);
@@ -115,7 +115,7 @@ static int gmeProcessKey (struct cpifaceSessionAPI_t *cpifaceSession, uint16_t k
 		case '>':
 		case KEY_CTRL_RIGHT: /* curses.h can't do these */
 			csg=globinfo.track+1;
-			if (csg<=globinfo.numtracks)
+			if (csg < globinfo.numtracks)
 			{
 				gmeStartSong (cpifaceSession, csg);
 				cpifaceSession->ResetSongTimer (cpifaceSession);
