@@ -61,6 +61,7 @@ static struct gme_info_t *gmetrackinfo;
 static int gme_cfg_loops = 2;          /* loops=       times the loop section is played, when the file gives intro/loop lengths (VGM, ...) */
 static int gme_cfg_defaultlength = 150; /* defaultlength= seconds, when the file gives no length (plain NSF, GBS, KSS, ...); 0 = forever */
 static int gme_cfg_fade = 8;            /* fade=        seconds of fade-out, unless the file specifies one */
+static long gme_cfg_rate = 44100;       /* output sample rate */
 
 /* NSF tracker view: chip state per frame, synchronized with what is heard */
 #define VIS_RING 16384                     /* frames kept (about 4.5 minutes) */
@@ -78,6 +79,16 @@ static volatile int vis_generation;        /* incremented when a track (re)start
 static int vis_newdata;
 static unsigned int vis_chips_header;      /* expansion chips from the file header, fallback for the layout */
 static int vis_rowframes = 6;
+
+/* Scout: a second, silent emulator of the same file and track that runs a few
+ * seconds ahead of the audio. Its frames fill the rows that are not heard yet.
+ * Emulation is deterministic, so they match what the main emulator will play.
+ * The main emulator keeps producing frames only when the scout is unavailable. */
+#define SCOUT_LEAD_SECONDS 4
+#define SCOUT_CHUNK 1024                    /* sample frames per gme_play() call */
+static Music_Emu *scoutsession;
+static int scout_active;                    /* scout feeds the view for the current track */
+static long scout_outpos;                   /* sample frames played by the scout since the track started */
 static const struct plrDevAPI_t *vis_plrDevAPI;
 
 static struct vis_slot_t
@@ -107,7 +118,7 @@ static void vis_pull (void)
 	{
 		return;
 	}
-	while ((n = gme_vis_read (gmesession, tmp, 64)) > 0)
+	while ((n = gme_vis_read (scout_active ? scoutsession : gmesession, tmp, 64)) > 0)
 	{
 		for (i = 0; i < n; i++)
 		{
@@ -238,6 +249,42 @@ OCP_INTERNAL const struct nsfvis_ch_t *gmeVisFrame (long frame)
 	return vis_ring + (frame % VIS_RING) * vis_layout.count;
 }
 
+/* lets the scout catch up to SCOUT_LEAD_SECONDS ahead of the audio, at most half a second of emulation per call */
+static void scout_run (void)
+{
+	static short buf[SCOUT_CHUNK * 2];
+	long target = vis_outpos + (long)SCOUT_LEAD_SECONDS * gme_cfg_rate;
+	long budget = gme_cfg_rate / 2;
+
+	if (!scout_active)
+	{
+		return;
+	}
+	while ((scout_outpos < target) && (budget > 0) && !gme_track_ended (scoutsession))
+	{
+		if (gme_play (scoutsession, SCOUT_CHUNK * 2, buf))
+		{
+			break;
+		}
+		scout_outpos += SCOUT_CHUNK;
+		budget -= SCOUT_CHUNK;
+	}
+}
+
+/* main emulator collects frames only when there is no scout */
+static void scout_stop (void)
+{
+	if (scout_active)
+	{
+		scout_active = 0;
+		gme_vis_enable (scoutsession, 0);
+		if (vis_enabled)
+		{
+			gme_vis_enable (gmesession, 1);
+		}
+	}
+}
+
 static void gmeApplyLength (void)
 {
 	long length = -1;
@@ -267,6 +314,10 @@ static void gmeApplyLength (void)
 	}
 	fade = (gmetrackinfo && (gmetrackinfo->fade_length > 0)) ? gmetrackinfo->fade_length : (long)gme_cfg_fade * 1000;
 	gme_set_fade_msecs (gmesession, length, fade);
+	if (scoutsession)
+	{
+		gme_set_fade_msecs (scoutsession, length, fade); /* the scout stops where the track stops */
+	}
 }
 
 /* start a sub-song, refresh its info and apply the length/fade limit */
@@ -278,6 +329,20 @@ static const char *gmeStartTrackInternal (int track)
 	if ((result = gme_start_track (gmesession, gmeactivetrack = track)))
 	{
 		return result;
+	}
+	if (scoutsession && vis_enabled)
+	{
+		scout_outpos = 0;
+		if (gme_start_track (scoutsession, track) || !gme_vis_enable (scoutsession, 1))
+		{
+			scout_stop ();
+		} else {
+			if (!scout_active)
+			{
+				gme_vis_enable (gmesession, 0);
+			}
+			scout_active = 1;
+		}
 	}
 	if (gmetrackinfo)
 	{
@@ -363,6 +428,7 @@ static void gmeIdler (struct cpifaceSessionAPI_t *cpifaceSession)
 		if (vis_enabled)
 		{
 			struct vis_slot_t *slot = &vis_slots[vis_slot_next];
+			scout_run ();
 			vis_pull ();
 			/* never wait on a busy slot: a callback lost in a freed ringbuffer would freeze the view for good.
 			 * If an old callback for this slot still fires, the generation check below ignores it. */
@@ -568,6 +634,10 @@ static void gmeSetSpeed (uint16_t sp)
 	if (sp < 4)
 		sp = 4;
 	gme_set_tempo (gmesession, (double)sp / 256.0f);
+	if (sp != 256)
+	{
+		scout_stop (); /* frames of the scout would no longer line up; back to the main emulator until the next track */
+	}
 }
 
 static void gmeSetPitch (uint16_t sp)
@@ -718,6 +788,13 @@ OCP_INTERNAL int gmeOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 		gmesession = 0;
 		return errFormMiss;
 	}
+	gme_cfg_rate = gmeRate;
+	scout_active = 0;
+	scoutsession = 0;
+	if (cpifaceSession->configAPI->GetProfileBool ("gme", "trackerview", 1, 1) && gme_open_data (data, datalen, &scoutsession, gmeRate))
+	{
+		scoutsession = 0;
+	}
 	free (data);
 	data = 0;
 
@@ -743,6 +820,11 @@ OCP_INTERNAL int gmeOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 	{
 		vis_enabled = gme_vis_enable (gmesession, 1);
 	}
+	if (scoutsession && !vis_enabled)
+	{
+		gme_delete (scoutsession);
+		scoutsession = 0;
+	}
 
 	if ((result = gmeStartTrackInternal (0)))
 	{
@@ -756,6 +838,7 @@ OCP_INTERNAL int gmeOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 
 	if (vis_enabled)
 	{
+		scout_run (); /* the first frames give the channel layout */
 		vis_pull ();
 		if (!vis_layout_done)
 		{
@@ -825,6 +908,13 @@ void gmeClosePlayer (struct cpifaceSessionAPI_t *cpifaceSession)
 	free (vis_ring);
 	vis_ring = 0;
 	vis_count = 0;
+
+	scout_active = 0;
+	if (scoutsession)
+	{
+		gme_delete (scoutsession);
+		scoutsession = 0;
+	}
 
 	if (gmesession)
 	{
