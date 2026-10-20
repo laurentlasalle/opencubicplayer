@@ -131,6 +131,53 @@ static int sdl3_compute_scale (SDL_Window *window)
 	return r;
 }
 
+/* macOS: window sizes are given in points, but with SDL_WINDOW_HIGH_PIXEL_DENSITY the
+ * framebuffer has pixel_density (2 on Retina) pixels per point. Everything above works in
+ * pixels, so only the calls that size the window need converting. Elsewhere points == pixels. */
+#ifdef __APPLE__
+# define SDL3_HIDPI_FLAG SDL_WINDOW_HIGH_PIXEL_DENSITY
+static int sdl3_px_to_pt (int px, float density)
+{
+	if (density > 1.0f)
+	{
+		return (int)ceilf ((float)px / density);
+	}
+	return px;
+}
+static float sdl3_window_density (SDL_Window *w)
+{
+	return SDL_GetWindowPixelDensity (w);
+}
+static float sdl3_desktop_density (void)
+{
+	const SDL_DisplayMode *m = SDL_GetDesktopDisplayMode (SDL_GetPrimaryDisplay ());
+	return m ? m->pixel_density : 1.0f;
+}
+#else
+# define SDL3_HIDPI_FLAG 0
+# define sdl3_px_to_pt(px,density) (px)
+# define sdl3_window_density(w) 1.0f
+# define sdl3_desktop_density() 1.0f
+#endif
+
+static SDL_Window *sdl3_CreateWindow (const char *title, int pw, int ph, SDL_WindowFlags flags)
+{
+	float d = sdl3_desktop_density ();
+	return SDL_CreateWindow (title, sdl3_px_to_pt (pw, d), sdl3_px_to_pt (ph, d), flags | SDL3_HIDPI_FLAG);
+}
+
+static void sdl3_SetWindowSize (SDL_Window *w, int pw, int ph)
+{
+	float d = sdl3_window_density (w);
+	SDL_SetWindowSize (w, sdl3_px_to_pt (pw, d), sdl3_px_to_pt (ph, d));
+}
+
+static void sdl3_SetWindowMinimumSize (SDL_Window *w, int pw, int ph)
+{
+	float d = sdl3_window_density (w);
+	SDL_SetWindowMinimumSize (w, sdl3_px_to_pt (pw, d), sdl3_px_to_pt (ph, d));
+}
+
 static int cachemode = -1;
 
 static void (*set_state)(const int fullscreen, int width, int height, const int window_resized) = 0;
@@ -293,7 +340,7 @@ static void set_state_textmode (const int fullscreen, int width, int height, con
 		{
 			if (!current_window)
 			{
-				current_window = SDL_CreateWindow ("Open Cubic Player",
+				current_window = sdl3_CreateWindow ("Open Cubic Player",
 				                                   0, 0,
 				                                   SDL_WINDOW_FULLSCREEN);
 				SDL_StartTextInput (current_window);
@@ -305,7 +352,7 @@ static void set_state_textmode (const int fullscreen, int width, int height, con
 			{
 				int newscale;
 				sdl3_scale = sdl3_compute_scale (0);
-				current_window = SDL_CreateWindow ("Open Cubic Player",
+				current_window = sdl3_CreateWindow ("Open Cubic Player",
 				                                   width * sdl3_scale, height * sdl3_scale,
 				                                   SDL_WINDOW_RESIZABLE);
 				ocp_milestone ("[SDL] window %dx%d (scale %d) %s", width, height, sdl3_scale, current_window ? "created" : "failed");
@@ -316,14 +363,14 @@ static void set_state_textmode (const int fullscreen, int width, int height, con
 					if (newscale != sdl3_scale)
 					{
 						sdl3_scale = newscale;
-						SDL_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
+						sdl3_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
 					}
 				}
 			} else {
 				sdl3_scale = sdl3_compute_scale (current_window);
 				SDL_SetWindowFullscreen (current_window, 0);
 				SDL_SetWindowResizable (current_window, true);
-				SDL_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
+				sdl3_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
 			}
 		}
 	}
@@ -364,7 +411,7 @@ static void set_state_textmode (const int fullscreen, int width, int height, con
 #endif
 					width  = FontSizeInfo[Console.CurrentFont].w * CONSOLE_MIN_X;
 					height = FontSizeInfo[Console.CurrentFont].h * CONSOLE_MIN_Y;
-					SDL_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
+					sdl3_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
 				} else {
 					fprintf(stderr, "             unable to find a small enough font for %d x %d\n", width, height);
 					exit(-1);
@@ -398,7 +445,7 @@ static void set_state_textmode (const int fullscreen, int width, int height, con
 	/* This call does nothing until we have a renderer, so that is why we waited until now */
 	if (!fullscreen)
 	{
-		SDL_SetWindowMinimumSize (current_window, FontSizeInfo[0].w * CONSOLE_MIN_X * sdl3_scale, FontSizeInfo[0].h * CONSOLE_MIN_Y * sdl3_scale);
+		sdl3_SetWindowMinimumSize (current_window, FontSizeInfo[0].w * CONSOLE_MIN_X * sdl3_scale, FontSizeInfo[0].h * CONSOLE_MIN_Y * sdl3_scale);
 	}
 
 	if (!current_texture)
@@ -529,7 +576,7 @@ static void set_state_graphmode (const int fullscreen, int width, int height, co
 			/* würfel mode often gets a window the horizontal resolution doubled */
 			if (window_resized && (width == 640) && (height == 200))
 			{
-				SDL_SetWindowSize (current_window, 640, 400);
+				sdl3_SetWindowSize (current_window, 640, 400);
 			}
 			Console.CurrentMode = 13;
 			mode = MODE_320_200;
@@ -558,7 +605,7 @@ static void set_state_graphmode (const int fullscreen, int width, int height, co
 		{
 			if (!current_window)
 			{
-				current_window = SDL_CreateWindow ("Open Cubic Player",
+				current_window = sdl3_CreateWindow ("Open Cubic Player",
 			                                           0, 0,
 			                                           SDL_WINDOW_FULLSCREEN);
 				SDL_StartTextInput (current_window);
@@ -570,7 +617,7 @@ static void set_state_graphmode (const int fullscreen, int width, int height, co
 			{
 				int newscale;
 				sdl3_scale = sdl3_compute_scale (0);
-				current_window = SDL_CreateWindow ("Open Cubic Player",
+				current_window = sdl3_CreateWindow ("Open Cubic Player",
 			                                           width * sdl3_scale, height * sdl3_scale,
 			                                           0);
 				if (current_window)
@@ -580,15 +627,15 @@ static void set_state_graphmode (const int fullscreen, int width, int height, co
 					if (newscale != sdl3_scale)
 					{
 						sdl3_scale = newscale;
-						SDL_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
+						sdl3_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
 					}
 				}
 			} else {
 				sdl3_scale = sdl3_compute_scale (current_window);
 				SDL_SetWindowFullscreen (current_window, 0);
 				SDL_SetWindowResizable (current_window, false);
-				SDL_SetWindowMinimumSize (current_window, 0, 0);
-				SDL_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
+				sdl3_SetWindowMinimumSize (current_window, 0, 0);
+				sdl3_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
 			}
 		}
 	}
@@ -1367,9 +1414,9 @@ static int ekbhit_sdl3dummy(void)
 						{
 							if (set_state == set_state_textmode)
 							{
-								SDL_SetWindowMinimumSize (current_window, FontSizeInfo[0].w * CONSOLE_MIN_X * sdl3_scale, FontSizeInfo[0].h * CONSOLE_MIN_Y * sdl3_scale);
+								sdl3_SetWindowMinimumSize (current_window, FontSizeInfo[0].w * CONSOLE_MIN_X * sdl3_scale, FontSizeInfo[0].h * CONSOLE_MIN_Y * sdl3_scale);
 							}
-							SDL_SetWindowSize (current_window, lw * sdl3_scale, lh * sdl3_scale);
+							sdl3_SetWindowSize (current_window, lw * sdl3_scale, lh * sdl3_scale);
 						} else {
 							set_state (current_fullsceen, lw, lh, 1);
 						}

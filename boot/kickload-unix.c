@@ -57,6 +57,9 @@
 #ifdef __HAIKU__
 #include <FindDirectory.h>
 #endif
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 #include "types.h"
 #include "boot/pmain.h"
 #include "boot/console.h"
@@ -137,6 +140,50 @@ static void restartstuff(struct itimerval *i)
 	}
 }
 
+#ifdef __APPLE__
+/* macOS application bundle: Contents/MacOS/ocp, everything else in Contents/Resources/.
+ * These are searched before the compiled-in paths, so the bundle can be moved anywhere. */
+static char *apple_exedir; /* directory of the executable, with a trailing / */
+static char *apple_resdir; /* <exedir>/../Resources/ */
+
+static void apple_locate_bundle (void)
+{
+	uint32_t size = 0;
+	char *path, *real, *slash;
+
+	_NSGetExecutablePath (NULL, &size);
+	path = malloc (size + 1);
+	if (!path || _NSGetExecutablePath (path, &size))
+	{
+		free (path);
+		return;
+	}
+	real = realpath (path, NULL);
+	free (path);
+	if (!real)
+	{
+		return;
+	}
+	slash = strrchr (real, '/');
+	if (!slash)
+	{
+		free (real);
+		return;
+	}
+	slash[1] = 0;
+	apple_exedir = real;
+	apple_resdir = malloc (strlen (real) + 16);
+	sprintf (apple_resdir, "%s../Resources/", real);
+}
+
+static char *apple_path (const char *dir, const char *file)
+{
+	char *r = malloc (strlen (dir) + strlen (file) + 1);
+	sprintf (r, "%s%s", dir, file);
+	return r;
+}
+#endif
+
 static const char *locate_ocp_ini_try(const char *base)
 {
 	struct stat st;
@@ -159,6 +206,16 @@ static const char *locate_ocp_ini(void)
 		} else*/if ((retval=locate_ocp_ini_try(temp)))
 				return retval;
 	}
+#ifdef __APPLE__
+	if (apple_resdir)
+	{
+		static char *bundle_ini; /* kept, the caller uses the returned string */
+		free (bundle_ini);
+		bundle_ini = apple_path (apple_resdir, "etc/ocp.ini");
+		if ((retval=locate_ocp_ini_try(bundle_ini)))
+			return retval;
+	}
+#endif
 	if ((retval=locate_ocp_ini_try(DATADIROCP "/etc/"     "ocp.ini")))
 		return retval;
 	if ((retval=locate_ocp_ini_try(DATADIR "/share/ocp/"  "ocp.ini")))
@@ -197,6 +254,21 @@ static char *locate_ocp_hlp(void)
 	if ((temp=getenv("OCPDIR")))
 		if ((retval=locate_ocp_hlp_try(temp)))
 			return retval;
+#ifdef __APPLE__
+	if (apple_resdir)
+	{
+		char *data = apple_path (apple_resdir, "data/");
+		if ((retval=locate_ocp_hlp_try(apple_resdir)))
+		{
+			free (data);
+			return retval;
+		}
+		retval = locate_ocp_hlp_try(data);
+		free (data);
+		if (retval)
+			return retval;
+	}
+#endif
 	if ((retval=locate_ocp_hlp_try(DATADIROCP "/")))
 		return retval;
 	if ((retval=locate_ocp_hlp_try(DATADIROCP "/data/")))
@@ -957,6 +1029,12 @@ static char *locate_libocp(void)
 		if ((retval=locate_libocp_try(dir, 0)))
 			return retval;
 */
+#ifdef __APPLE__
+	if (apple_resdir && (retval=locate_libocp_try(apple_resdir, 0)))
+		return retval;
+	if (apple_exedir && (retval=locate_libocp_try(apple_exedir, 0)))
+		return retval;
+#endif
 	if ((retval=locate_libocp_try(LIBDIROCP, 1)))
 		return retval;
 	if ((retval=locate_libocp_try(PREFIX "/lib", 1)))
@@ -1013,6 +1091,41 @@ int main(int argc, char *argv[])
 #endif
 
 	AllowSymlinked=(getuid()==geteuid());
+
+#ifdef __APPLE__
+	apple_locate_bundle ();
+	if (apple_exedir && strstr (apple_exedir, ".app/Contents/MacOS/"))
+	{
+		/* started from the application bundle (Finder, Dock, open): no terminal, so use
+		 * the SDL3 window unless a driver was given, and start in the home directory
+		 * instead of / */
+		int i, hasdriver = 0;
+		char cwd[2];
+		for (i = 1; i < argc; i++)
+		{
+			if (!strncmp (argv[i], "-d", 2))
+			{
+				hasdriver = 1;
+			}
+		}
+		if (!hasdriver)
+		{
+			char **newargv = malloc (sizeof (char *) * (argc + 2));
+			newargv[0] = argv[0];
+			newargv[1] = "-dsdl3";
+			for (i = 1; i <= argc; i++)
+			{
+				newargv[i + 1] = argv[i]; /* includes the terminating NULL */
+			}
+			argv = newargv;
+			argc++;
+		}
+		if (getcwd (cwd, sizeof (cwd)) && !strcmp (cwd, "/") && getenv ("HOME"))
+		{
+			if (chdir (getenv ("HOME"))) {}
+		}
+	}
+#endif
 
 	if (validate_home())
 		return -1;
