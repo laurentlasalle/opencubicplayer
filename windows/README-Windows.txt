@@ -154,6 +154,7 @@ Omni v8 (3.5.0-omni.8)
  - File browser status line: "F1 = help, ALT-K = shortcuts, ALT-C = setup"
  - Tracker view also for SPC (SNES), VGM / GYM (Genesis, Master System) and
    S98 (PC-88/PC-98); shorter cells when there are many channels
+ - The volume set with - / + or F2 / F3 is kept for the next files
 Omni v7 (3.5.0-omni.7, 2026-10-19)
  - Versions named <upstream version>-omni.<release>; OCP itself reports the
    upstream version again (3.5.0), the title bar shows "Omni v7"

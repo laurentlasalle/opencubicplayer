@@ -172,7 +172,7 @@ static void scout_read (void)
 			{
 				if ((idx + 1 < main_frames) || (idx >= main_frames))
 				{
-					continue; /* not there yet (or main emulator has no frame yet) */
+					continue; /* not there yet (or no main frame to align on) */
 				}
 				/* reached the last frame of the main emulator: align the stamps */
 				scout_offset = main_stamp[idx % MAIN_STAMPS] - tmp[i].sample;
@@ -309,8 +309,8 @@ OCP_INTERNAL const struct nsfvis_ch_t *gmeVisFrame (long frame)
 }
 
 /* restarts the scout on the current track at the current tempo; it replays the track
- * silently until it reaches the main emulator (SCOUT_CATCHUP), then goes ahead */
-static void scout_restart (int synced)
+ * (registers only) until it reaches the main emulator (SCOUT_CATCHUP), then goes ahead */
+static void scout_restart (void)
 {
 	if (!scoutsession || !vis_enabled)
 	{
@@ -318,17 +318,18 @@ static void scout_restart (int synced)
 	}
 	gme_vis_enable (scoutsession, 0);
 	gme_set_tempo (scoutsession, (double)scout_tempo / 256.0);
+	gme_ignore_silence (scoutsession, 1); /* its output may be silent (registers only): never skip or end on silence */
 	scout_outpos = 0;
 	scout_frames = 0;
 	scout_offset = 0;
 	scout_state = SCOUT_OFF;
-	if (gme_start_track (scoutsession, gmeactivetrack) || !gme_vis_enable (scoutsession, 1))
+	if (gme_start_track (scoutsession, gmeactivetrack) || !gme_vis_enable (scoutsession, 2 /* registers only */))
 	{
 		scout_failed = 1;
 		return;
 	}
 	scout_failed = 0;
-	scout_state = synced ? SCOUT_SYNCED : SCOUT_CATCHUP;
+	scout_state = SCOUT_CATCHUP; /* align on the main emulator by frame index (the initial silence it skips does not matter) */
 }
 
 /* lets the scout run up to SCOUT_LEAD_SECONDS ahead of the audio, at most half a second
@@ -344,7 +345,7 @@ static void scout_run (void)
 	}
 	if ((scout_state == SCOUT_OFF) && !scout_failed && (vis_outpos - scout_tempo_changed > gme_cfg_rate / 2))
 	{ /* tempo stable for half a second (e.g. end of a pause fade): resynchronize */
-		scout_restart (0);
+		scout_restart ();
 	}
 	if (scout_state == SCOUT_OFF)
 	{
@@ -356,6 +357,10 @@ static void scout_run (void)
 		if ((scout_state == SCOUT_SYNCED) && (scout_outpos + scout_offset >= vis_outpos + (long)SCOUT_LEAD_SECONDS * gme_cfg_rate))
 		{
 			break;
+		}
+		if ((scout_state == SCOUT_CATCHUP) && (scout_frames >= main_frames))
+		{
+			break; /* wait for the main emulator */
 		}
 		if (gme_play (scoutsession, SCOUT_CHUNK * 2, buf))
 		{
@@ -413,7 +418,7 @@ static const char *gmeStartTrackInternal (int track)
 	{
 		return result;
 	}
-	scout_restart (1); /* both emulators start together: same stamps */
+	scout_restart ();
 	if (gmetrackinfo)
 	{
 		gme_free_info (gmetrackinfo);

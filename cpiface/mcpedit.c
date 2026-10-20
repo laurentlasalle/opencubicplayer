@@ -134,11 +134,13 @@ OCP_INTERNAL int mcpSetProcessKey (struct cpifaceSessionPrivate_t *f, uint16_t k
 		case '-':
 			if (f->mcpset.vol>=2)
 				f->mcpset.vol-=2;
+			set.vol = f->mcpset.vol; /* keep the volume for the next files */
 			f->Public.mcpSet (&f->Public, -1, mcpMasterVolume, f->mcpset.vol * f->MasterPauseFadeParameter / 64);
 			break;
 		case '+':
 			if (f->mcpset.vol<=62)
 				f->mcpset.vol+=2;
+			set.vol = f->mcpset.vol;
 			f->Public.mcpSet (&f->Public, -1, mcpMasterVolume, f->mcpset.vol * f->MasterPauseFadeParameter / 64);
 			break;
 		case '/':
@@ -165,12 +167,14 @@ OCP_INTERNAL int mcpSetProcessKey (struct cpifaceSessionPrivate_t *f, uint16_t k
 		case KEY_F(2):
 			if ((f->mcpset.vol-=8)<0)
 				f->mcpset.vol=0;
+			set.vol = f->mcpset.vol;
 			f->Public.mcpSet (&f->Public, -1, mcpMasterVolume, f->mcpset.vol * f->MasterPauseFadeParameter / 64);
 			break;
 		/*case 0x3d00: //f3*/
 		case KEY_F(3):
 			if ((f->mcpset.vol+=8)>64)
 				f->mcpset.vol=64;
+			set.vol = f->mcpset.vol;
 			f->Public.mcpSet (&f->Public, -1, mcpMasterVolume, f->mcpset.vol * f->MasterPauseFadeParameter / 64);
 			break;
 		/*case 0x3e00: //f4*/
@@ -327,6 +331,7 @@ OCP_INTERNAL int mcpSetProcessKey (struct cpifaceSessionPrivate_t *f, uint16_t k
 			f->mcpset.pan=64;
 			f->mcpset.bal=0;
 			f->mcpset.vol=64;
+			set.vol = f->mcpset.vol;
 			f->mcpset.speed=256;
 			f->mcpset.pitch=256;
 			f->mcpset.chorus=0;
