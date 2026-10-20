@@ -101,6 +101,10 @@
   loops=2                 ; times the loop section is played, when the file gives intro/loop lengths
   fade=8                  ; seconds of fade-out (unless the file specifies one)
 
+[s98]                     ; S98 (PC-88/PC-98...) through libvgm
+  loops=2                 ; times the loop section is played before fading out
+  fade=8                  ; seconds of fade-out
+
 [libsidplayfp]
 ; emulator=residfp    to use the floating point version (CPU heavy)
 ; emulator=crSID      to use the integer version (sidlite)

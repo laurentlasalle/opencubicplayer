@@ -17,6 +17,10 @@ endif
 ifeq ($(HAVE_WAVPACK),1)
 SUBDIRS+=playwavpack
 endif
+# S98 player, needs libvgm (https://github.com/ValleyBell/libvgm) visible to pkg-config
+ifeq ($(shell $(or $(PKG_CONFIG),pkg-config) --exists vgm-player vgm-emu vgm-utils && echo 1),1)
+SUBDIRS+=plays98
+endif
 SUBDIRS+=playsid playwav playxm playym stuff
 SUBDIRS+=mingw
 
