@@ -12,6 +12,7 @@
 #include <string.h>
 #include "types.h"
 #include "s98play.h"
+#include "../playgme/gmeplay.h"
 #include "s98type.h"
 #include "boot/plinkman.h"
 #include "cpiface/cpiface.h"
@@ -94,6 +95,14 @@ static int s98OpenFile (struct cpifaceSessionAPI_t *cpifaceSession, struct modul
 	if ((retval = s98OpenPlayer(file, cpifaceSession)))
 	{
 		return retval;
+	}
+
+	cpifaceSession->LogicalChannelCount = s98ChannelCount ();
+	cpifaceSession->SetMuteChannel = s98SetMute;
+	if (s98ChannelCount ())
+	{
+		cpifaceSession->TrackSetup2 (cpifaceSession, &gmeTrakDisplay, GME_TRAK_PATTERNS, s98ChannelCount ());
+		cpifaceSession->TrackStretch (cpifaceSession, 1);
 	}
 
 	cpifaceSession->InPause = 0;

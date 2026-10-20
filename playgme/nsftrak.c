@@ -91,6 +91,12 @@ static const char *short_name (const char *n, char *buf)
 	if (!strncmp (n, "Multi ", 6)) { snprintf (buf, 8, "M%s", n + 6); return buf; }
 	if (!strncmp (n, "Square ", 7)) { snprintf (buf, 8, "Sq%s", n + 7); return buf; }
 	if (!strcmp (n, "Wave")) return "Wav";
+	if (!strncmp (n, "FM ", 3)) { snprintf (buf, 8, "FM%s", n + 3); return buf; }
+	if (!strncmp (n, "OPLL ", 5)) { snprintf (buf, 8, "OL%s", n + 5); return buf; }
+	if (!strncmp (n, "Voice ", 6)) { snprintf (buf, 8, "V%s", n + 6); return buf; }
+	if (!strncmp (n, "SSG ", 4)) { snprintf (buf, 8, "SG%s", n + 4); return buf; }
+	if (!strcmp (n, "Rhythm")) return "Rhy";
+	if (!strcmp (n, "ADPCM")) return "PCM";
 	return n;
 }
 
@@ -219,6 +225,17 @@ static int trak_getnote (struct cpifaceSessionAPI_t *cpifaceSession, uint16_t *b
 					cpifaceSession->console->WriteString (bp, 0, COLDPCM, "S", 1);
 					break;
 			}
+		} else if (c->kind == NSFVIS_DRUMS)
+		{ /* up to 3 letters: Bass drum, Snare, Hi-hat, top Cymbal, Tom, Rim shot */
+			static const char order[6] = {0, 1, 3, 2, 4, 5};
+			static const char letter[6] = {'B', 'S', 'C', 'H', 'T', 'R'};
+			char t[4] = "   ";
+			int k, m = 0;
+			for (k = 0; k < 6 && m < 3 - small; k++)
+			{
+				if ((c->aux >> order[k]) & 1) t[m++] = letter[(int)order[k]];
+			}
+			cpifaceSession->console->WriteString (bp, 0, COLNOISE, t, 3 - small);
 		} else if (c->kind == NSFVIS_PCM || c->note < 0)
 		{
 			cpifaceSession->console->WriteString (bp, 0, COLDPCM, "***", 3 - small);

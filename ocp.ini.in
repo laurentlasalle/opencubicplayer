@@ -100,7 +100,7 @@
   defaultlength=150       ; seconds before fade-out when the file gives no length (plain NSF...); 0 = loop forever
   loops=2                 ; times the loop section is played, when the file gives intro/loop lengths
   fade=8                  ; seconds of fade-out (unless the file specifies one)
-  trackerview=on          ; NSF/NSFe/HES/GBS: tracker-like pattern view built from the sound chip registers
+  trackerview=on          ; NSF/NSFe/HES/GBS/SPC/VGM/GYM, and S98: tracker-like pattern view built from the sound chip registers
   rowframes=6             ; tracker view: frames (1/60 s) per row
 ; these settings can also be changed in setup:/gmeconfig.dev
 

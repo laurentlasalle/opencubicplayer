@@ -100,7 +100,7 @@ static void gmeConfigDraw (int EditPos, const struct DevInterfaceAPI_t *API)
 	API->console->DisplayPrintf (mlTop++, mlLeft, 0x07, mlWidth, " Navigate with arrows and hit %.15o<ESC>%.7o to save and exit.");
 	mlTop++; /* horizontal bar */
 
-	API->console->DisplayPrintf (mlTop++, mlLeft, 0x07, mlWidth, " 1. NSF/HES/GBS tracker view (pattern view built from the sound chip registers):");
+	API->console->DisplayPrintf (mlTop++, mlLeft, 0x07, mlWidth, " 1. Tracker view: NSF, HES, GBS, SPC, VGM, GYM and S98 (from the chip registers):");
 	DrawItems (mlTop++, mlLeft + 3, mlWidth - 3, offon, 2, cfgTrackerView, EditPos==0, API);
 	API->console->DisplayPrintf (mlTop++, mlLeft, 0x07, mlWidth, " 2. Tracker view, frames per row (60 frames = 1 second):");
 	DrawBar (mlTop++, mlLeft + 4, mlWidth - 5, cfgRowFrames, 1, 32, "frames", EditPos==1, API);

@@ -567,19 +567,22 @@ static int stretchwidth (void)
 		return 0;
 	}
 	w = (plPatWidth - 4 - 4) / overrideplNLChan; /* row number + separator on both sides */
-	return (w >= 9) ? w : 0; /* smallest cell: "C-4 02 F" + separator */
+	return (w >= 4) ? w : 0; /* smallest cell: "C-4" + separator */
 }
 
 /* channel cell, centered in the column (the last character of the column is the separator):
  *   "C-4 02 0F x" 11 characters, x = getfx()
  *   "C-4 02 0F"    9 characters
  *   "C-4 02 F"     8 characters, only the last digit of the volume (enough for volumes 0-F)
+ *   "C-4 F"        5 characters, note and last digit of the volume
+ *   "C-4"          3 characters, note only
  */
 static void preparepatstretch (struct cpifaceSessionAPI_t *cpifaceSession, int pat, int colw)
 {
 	int i;
 	int chnn = overrideplNLChan;
-	int cellw = (colw >= 12) ? 11 : (colw >= 10) ? 9 : 8;
+	int cellw = (colw >= 12) ? 11 : (colw >= 10) ? 9 : (colw >= 9) ? 8 : (colw >= 6) ? 5 : 3;
+	const char *content = (cellw == 11) ? "(note, ins, vol, slide)" : (cellw >= 8) ? "(note, ins, vol)" : (cellw == 5) ? "(note, vol)" : "(notes)";
 	int off = (colw - 1 - cellw + 1) / 2; /* last character of the column is the separator */
 	const char *pname;
 	uint16_t patmask[CONSOLE_MAX_X];
@@ -591,7 +594,7 @@ static void preparepatstretch (struct cpifaceSessionAPI_t *cpifaceSession, int p
 	plPrepdPat=pat;
 
 	pname = getpatname (cpifaceSession, pat);
-	snprintf (pattitle1, sizeof (pattitle1), "   pattern view:  order %03X, %2d channels,  %s%s%s", pat, chnn, (cellw == 11) ? "(note, ins, vol, slide)" : "(note, ins, vol)", (pname&&*pname)?": ":"", (pname&&*pname)?pname:"");
+	snprintf (pattitle1, sizeof (pattitle1), "   pattern view:  order %03X, %2d channels,  %s%s%s", pat, chnn, content, (pname&&*pname)?": ":"", (pname&&*pname)?pname:"");
 	if ((int)strlen (pattitle1) > plPatWidth)
 	{ /* keep the title on one line */
 		snprintf (pattitle1, sizeof (pattitle1), "   pattern view:  order %03X, %2d channels", pat, chnn);
@@ -690,15 +693,19 @@ static void preparepatstretch (struct cpifaceSessionAPI_t *cpifaceSession, int p
 				{
 					uint16_t *bp=plPatBuf[currow+firstrow-firstprow]+p0+i*colw+off;
 					getnote (cpifaceSession, bp, 0);
-					getins  (cpifaceSession, bp + 4);
-					if (cellw == 8)
+					if (cellw >= 8)
+					{
+						getins  (cpifaceSession, bp + 4);
+					}
+					if ((cellw == 8) || (cellw == 5))
 					{
 						uint16_t v[2];
 						if (getvol (cpifaceSession, v))
 						{
-							bp[7] = v[1];
+							bp[cellw - 1] = v[1];
 						}
-					} else {
+					} else if (cellw >= 9)
+					{
 						getvol  (cpifaceSession, bp + 7);
 					}
 					if (cellw == 11)

@@ -35,8 +35,11 @@ s98play.o: s98play.c \
 	../filesel/filesystem.h \
 	../stuff/err.h \
 	../stuff/imsrtns.h \
+	../playgme/gmeplay.h \
+	../playgme/nsfvis.h \
 	s98lib.h \
-	s98play.h
+	s98play.h \
+	s98vis.h
 	$(CC) $< -o $@ -c
 
 s98pplay.o: s98pplay.c \
@@ -68,6 +71,25 @@ s98type.o: s98type.c \
 	s98type.h
 	$(CC) $< -o $@ -c
 
-plays98_so=s98type.o s98play.o s98pplay.o s98lib.o
+s98vis.o: s98vis.c \
+	../playgme/nsfvis.h \
+	s98vis.h
+	$(CC) $< -o $@ -c
+
+# tracker view code shared with playgme
+s98nsftrak.o: ../playgme/nsftrak.c \
+	../config.h \
+	../types.h \
+	../cpiface/cpiface.h \
+	../playgme/gmeplay.h \
+	../playgme/nsfvis.h \
+	../stuff/poutput.h
+	$(CC) $< -o $@ -c
+
+s98nsfvis.o: ../playgme/nsfvis.c \
+	../playgme/nsfvis.h
+	$(CC) $(LIBGME_CFLAGS) $< -o $@ -c
+
+plays98_so=s98type.o s98play.o s98pplay.o s98lib.o s98vis.o s98nsftrak.o s98nsfvis.o
 plays98$(LIB_SUFFIX): $(plays98_so)
-	$(CXX) $(SHARED_FLAGS) -o $@ $^ $(LIBVGM_LIBS) $(ICONV_LIBS) -lz $(if $(filter 1,$(WINDOWS)),-Wl$(comma)--exclude-all-symbols)
+	$(CXX) $(SHARED_FLAGS) -o $@ $^ $(LIBVGM_LIBS) $(ICONV_LIBS) -lz -lm $(if $(filter 1,$(WINDOWS)),-Wl$(comma)--exclude-all-symbols)

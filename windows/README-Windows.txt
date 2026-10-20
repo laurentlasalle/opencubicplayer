@@ -69,12 +69,14 @@ The [gme] section can be added as is to the ocp.ini in %APPDATA%; otherwise
 these defaults apply. These settings can also be changed inside OCP: in the
 file browser, go to setup: and open gmeconfig.dev (arrows, Esc to save).
 
-Tracker view for NSF / NSFe / HES / GBS (section [gme])
--------------------------------------------------------
-While an NSF (NES), HES (PC Engine) or GBS (Game Boy) file plays, the
-"pattern" view (key t) shows the channels like a tracker (FamiTracker,
-MOD/S3M). It is rebuilt from the sound chip registers, read 60 times per
-second (50 for PAL), and follows exactly what is heard.
+Tracker view for chiptunes (section [gme])
+------------------------------------------
+While an NSF (NES), HES (PC Engine), GBS (Game Boy), SPC (SNES), VGM / GYM
+(Genesis, Master System) or S98 (PC-88/PC-98) file plays, the "pattern" view
+(key t) shows the channels like a tracker (FamiTracker, MOD/S3M). It is
+rebuilt from the sound chip registers, read 60 times per second (50 for PAL),
+and follows exactly what is heard. The rows below the current one are filled
+in advance.
  - The number/channel mapping is shown in the title of the view
    (1:P1 2:P2 3:Tri 4:Noi 5:DMC ...).
  - NSF: one column per channel: Pulse 1, Pulse 2, Triangle, Noise, DPCM,
@@ -85,23 +87,36 @@ second (50 for PAL), and follows exactly what is heard.
    "X-#". DDA mode (samples, drums): "***".
  - GBS: 4 channels (Sq1, Sq2, Wav, Noi). Instrument = duty cycle (squares),
    waveform number (Wav), short noise mode (01).
+ - SPC: 8 voices (V1-V8). Instrument = sample number. The SNES only knows
+   the playback speed of a sample, not its note: the pitch of each looping
+   sample is measured once from the sound RAM. One-shot samples (drums,
+   effects) show their number, "Sxx", instead of a note.
+ - VGM / GYM: FM1-FM6 (YM2612; FM6 shows "***" when it plays samples), then
+   Sq1-Sq3 and Noi (SN76489), or OL1-OL9 for the YM2413 (Master System FM).
+   Instrument = FM patch, numbered in order of appearance. Muting a PSG
+   column mutes the whole PSG (the emulator has a single PSG voice).
+ - S98: the chips listed in the file: FM channels (YM2203, YM2608, YM2612,
+   YM2151), SSG A-C (SGA-SGC), rhythm (Rhy: B bass drum, S snare, H hi-hat,
+   C cymbal, T tom, R rim shot) and ADPCM (PCM). Channels that the song never
+   uses are hidden.
  - One row = 6 frames (1/10 s) by default. Each cell shows the note (or the
    noise frequency "X-#", the DPCM sample "Sxx"), the instrument and the
    volume. "---" = the channel went silent. Notes come from the actual
    frequencies.
  - The columns share the full width of the screen, whatever the number of
-   channels (4, 5, 6, 8...). When there is room, a 4th field shows that the
-   frequency moves during the row: ^ up, v down, ~ vibrato (CP437 arrows
-   and symbol on screen). A vibrato or portamento does not repeat the note.
-   With many channels the volume has a single digit, and beyond about 9
-   channels on 80 columns, OCP falls back to its usual layouts (channels
-   scroll). Tab / PgUp / PgDn select another layout; Home returns to this one.
+   channels. When there is room, a 4th field shows that the frequency moves
+   during the row: ^ up, v down, ~ vibrato (CP437 arrows and symbol on
+   screen). A vibrato or portamento does not repeat the note. With more
+   channels the cells get shorter: note, instrument and volume, then note
+   and volume (one digit), then the note alone; beyond about 18 channels on
+   80 columns, OCP falls back to its usual layouts (channels scroll).
+   Tab / PgUp / PgDn select another layout; Home returns to this one.
  - Keys 1 to 9 and 0: mute/unmute a channel; q and s as usual. (These keys
    also work with the other GME formats: SPC, VGM..., one key per emulator
    voice.)
     trackerview=on   off for the original display
     rowframes=6      frames per row (1 to 32); 3 = more detail, 12 = more compact
-The other GME formats (SPC, VGM, KSS...) have no tracker view.
+The other formats (KSS, AY, SAP...) have no tracker view.
 
 S98 files (NEC PC-88/PC-98, Sharp X1/X68000) - section [s98]
 -----------------------------------------------------------
@@ -137,6 +152,8 @@ Omni v8 (3.5.0-omni.8)
  - Tracker view: the upcoming rows come back after a pause (with fade) or a
    speed change; they also work at another speed than 100 %
  - File browser status line: "F1 = help, ALT-K = shortcuts, ALT-C = setup"
+ - Tracker view also for SPC (SNES), VGM / GYM (Genesis, Master System) and
+   S98 (PC-88/PC-98); shorter cells when there are many channels
 Omni v7 (3.5.0-omni.7, 2026-10-19)
  - Versions named <upstream version>-omni.<release>; OCP itself reports the
    upstream version again (3.5.0), the title bar shows "Omni v7"
@@ -197,6 +214,8 @@ build-deps.sh, build-ocp.sh, package.sh). Changes to the upstream sources:
  - omni-version.h (new): Omni release number, shown in the title bar;
    filesel/mdb.c rescans files of unknown type after an Omni update
  - libgme (game-music-emu, separate repository): new API gme_vis_enable /
-   gme_vis_read (NSF, HES, GBS) that copies the sound chip registers once per
-   frame
+   gme_vis_read (NSF, HES, GBS, VGM, GYM, SPC) that copies the sound chip
+   registers once per frame
+ - plays98/s98vis.c (new): S98 tracker view, reads the command stream ahead
+   of libvgm; plays98 shares playgme/nsftrak.c and nsfvis.c
 iconv is provided by win-iconv instead of GNU libiconv.

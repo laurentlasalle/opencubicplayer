@@ -2,7 +2,7 @@
 #define _NSFVIS_H 1
 
 /* Decodes sound chip register snapshots (gme_nsf_frame_t / gme_vis_frame_t) of
- * NSF, HES and GBS files into tracker-like per channel information: note, volume,
+ * NSF, HES, GBS, VGM/GYM and SPC files into tracker-like per channel information: note, volume,
  * "instrument" (duty / mode / patch / waveform number). */
 
 #include <stdint.h>
@@ -14,7 +14,8 @@ enum nsfvis_kind
 	NSFVIS_TONE  = 0, /* pitched channel, note valid */
 	NSFVIS_NOISE = 1, /* aux = period index 0..15 */
 	NSFVIS_DPCM  = 2, /* aux = sample address register */
-	NSFVIS_PCM   = 3  /* raw PCM output, no pitch */
+	NSFVIS_PCM   = 3, /* raw PCM output, no pitch */
+	NSFVIS_DRUMS = 4  /* rhythm section, aux = bitmask of the drums started (bit 0 bass, 1 snare, 2 top cymbal, 3 hi-hat, 4 tom, 5 rim shot) */
 };
 
 struct nsfvis_ch_t
@@ -36,8 +37,16 @@ struct nsfvis_layout_t
 	char name  [NSFVIS_MAXCH][10];   /* short label */
 	int  src   [NSFVIS_MAXCH];       /* internal decoder id */
 	int  wavecount;                  /* HES / GBS: waveforms seen so far, numbered as "instruments" */
-	uint32_t wavesig [64];
+	uint32_t wavesig [255];
 };
+
+/* SPC: sound RAM of the emulator (samples), used to find the pitch of each sample */
+void nsfvis_set_ram (const unsigned char *ram);
+
+/* helpers for other decoders (plays98) */
+void nsfvis_add_channel (struct nsfvis_layout_t *l, int voice, int src, const char *name);
+int  nsfvis_note (double freq, int16_t *cents); /* note number (A-4 = 69), -1 if out of range; *cents = exact pitch */
+int  nsfvis_wave_id (struct nsfvis_layout_t *l, const unsigned char *data, int len); /* "instrument" number of a waveform / patch */
 
 struct gme_nsf_frame_t;
 

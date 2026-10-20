@@ -898,6 +898,7 @@ OCP_INTERNAL int gmeOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 	{
 		vis_enabled = gme_vis_enable (gmesession, 1);
 	}
+	nsfvis_set_ram (gme_vis_ram (gmesession)); /* SPC samples, to find their pitch */
 	if (scoutsession && !vis_enabled)
 	{
 		gme_delete (scoutsession);
@@ -926,6 +927,14 @@ OCP_INTERNAL int gmeOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 			empty.n163[0x7F] = 0x70; /* unknown: 8 channels */
 			if (gme_type (gmesession) == gme_hes_type) empty.system = 1;
 			if (gme_type (gmesession) == gme_gbs_type) empty.system = 2;
+			if ((gme_type (gmesession) == gme_vgm_type) || (gme_type (gmesession) == gme_vgz_type) || (gme_type (gmesession) == gme_gym_type))
+			{
+				empty.system = 3;
+				empty.vgm_chips = 1 | 4;
+				empty.psg_clock = 3579545;
+				empty.ym2612_clock = 7670453;
+			}
+			if (gme_type (gmesession) == gme_spc_type) empty.system = 4;
 			nsfvis_layout (&vis_layout, &empty);
 			vis_ring = calloc ((size_t)VIS_RING * vis_layout.count, sizeof (struct nsfvis_ch_t));
 			vis_layout_done = vis_ring != 0;
