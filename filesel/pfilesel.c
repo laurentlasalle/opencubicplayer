@@ -2478,10 +2478,10 @@ static void fsShowDir(unsigned int firstv, unsigned int selectv, unsigned int fi
 
 	if (plScrWidth <= 90)
 	{
-		displaystr (plScrHeight-1, 0, 0x17, " quickfind: [            ]    press F1 for help, or ALT-C for basic setup", plScrWidth);
+		displaystr (plScrHeight-1, 0, 0x17, " quickfind: [            ]    F1 = help, ALT-K = shortcuts, ALT-C = setup", plScrWidth);
 		displaystr_utf8_overflowleft (plScrHeight-1, 13, 0x1f, quickfind, 12);
 	} else {
-		displaystr (plScrHeight-1, 0, 0x17, " quickfind: [                        ]    press F1 for help, or ALT-C for basic setup", plScrWidth);
+		displaystr (plScrHeight-1, 0, 0x17, " quickfind: [                        ]    F1 = help, ALT-K = shortcuts, ALT-C = setup", plScrWidth);
 		displaystr_utf8_overflowleft (plScrHeight-1, 13, 0x1f, quickfind, 24);
 	}
 

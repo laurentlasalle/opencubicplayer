@@ -11,6 +11,10 @@ Versions are named <upstream version>-omni.<release>, e.g. 3.5.0-omni.8.
 Start: double-click ocp.exe (SDL3 window, no console window).
 Requires Windows 10 or 11, 64-bit.
 
+Keys: F1 opens the manual; Alt+K lists the keys available on the current
+screen (file browser, playback, tracker view...), always up to date; Alt+C
+opens the basic setup.
+
 Log file (diagnostics)
 ----------------------
 On every start, OCP writes its messages to
@@ -130,6 +134,9 @@ Omni v8 (3.5.0-omni.8)
    emulator runs a few seconds ahead of the audio)
  - Channel names in the column header of the tracker view, shorter title
  - 128x48 text mode by default (screentype=4)
+ - Tracker view: the upcoming rows come back after a pause (with fade) or a
+   speed change; they also work at another speed than 100 %
+ - File browser status line: "F1 = help, ALT-K = shortcuts, ALT-C = setup"
 Omni v7 (3.5.0-omni.7, 2026-10-19)
  - Versions named <upstream version>-omni.<release>; OCP itself reports the
    upstream version again (3.5.0), the title bar shows "Omni v7"

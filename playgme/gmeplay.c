@@ -87,8 +87,18 @@ static int vis_rowframes = 6;
 #define SCOUT_LEAD_SECONDS 4
 #define SCOUT_CHUNK 1024                    /* sample frames per gme_play() call */
 static Music_Emu *scoutsession;
-static int scout_active;                    /* scout feeds the view for the current track */
-static long scout_outpos;                   /* sample frames played by the scout since the track started */
+enum { SCOUT_OFF, SCOUT_CATCHUP, SCOUT_SYNCED };
+static int scout_state;                     /* SYNCED: the scout feeds the view; CATCHUP: replaying the track to reach the main emulator */
+static long scout_outpos;                   /* sample frames played by the scout since its track started */
+static long scout_offset;                   /* added to the scout stamps to get main emulator stamps */
+static long scout_frames;                   /* frames read from the scout since its track started */
+static long main_frames;                    /* frames read from the main emulator since the track started */
+#define MAIN_STAMPS 4096
+static long main_stamp[MAIN_STAMPS];        /* stamps of the last frames of the main emulator, by frame index */
+static long vis_pushed;                     /* index of the last frame given to the view, -1 if none */
+static int scout_tempo = 256;               /* tempo of both emulators (256 = normal) */
+static long scout_tempo_changed;            /* vis_outpos of the last tempo change */
+static int scout_failed;                    /* could not start the track, do not retry until the next one */
 static const struct plrDevAPI_t *vis_plrDevAPI;
 
 static struct vis_slot_t
@@ -101,12 +111,82 @@ static int vis_slot_next;
 
 static void vis_track_reset (void)
 {
+	main_frames = 0;
+	vis_pushed = -1;
+	scout_tempo_changed = 0;
 	vis_generation++;
 	vis_first = 0;
 	vis_count = 0;
 	vis_outpos = 0;
 	vis_playpos = 0;
 	vis_generation++;
+}
+
+static void vis_push (gme_nsf_frame_t *f)
+{
+	long idx;
+	if (!vis_layout_done)
+	{
+		if (!f->system && !f->chips) f->chips = vis_chips_header;
+		nsfvis_layout (&vis_layout, f);
+		vis_ring = calloc ((size_t)VIS_RING * vis_layout.count, sizeof (struct nsfvis_ch_t));
+		if (!vis_ring)
+		{
+			vis_enabled = 0;
+			return;
+		}
+		vis_layout_done = 1;
+	}
+	/* frames emulated while libgme skipped the initial silence are stamped too late:
+	 * drop them when the timeline goes backwards (they are silent anyway) */
+	while (vis_count && (vis_sample[(vis_first + vis_count - 1) % VIS_RING] >= f->sample))
+	{
+		vis_count--;
+	}
+	if (vis_count == VIS_RING)
+	{
+		vis_first++;
+		vis_count--;
+	}
+	idx = (vis_first + vis_count) % VIS_RING;
+	nsfvis_decode (&vis_layout, f, vis_ring + idx * vis_layout.count);
+	vis_sample[idx] = f->sample;
+	vis_count++;
+	vis_newdata = 1;
+}
+
+/* Frames are numbered from the start of the track, the same way for both emulators
+ * (the k-th frame holds the same registers whatever the tempo). A frame is given to
+ * the view once: by the scout when it is synchronized (it is ahead), else by the
+ * main emulator. */
+static void scout_read (void)
+{
+	gme_nsf_frame_t tmp[64];
+	int n, i;
+	while ((scout_state != SCOUT_OFF) && ((n = gme_vis_read (scoutsession, tmp, 64)) > 0))
+	{
+		for (i = 0; i < n; i++)
+		{
+			long idx = scout_frames++;
+			if (scout_state == SCOUT_CATCHUP)
+			{
+				if ((idx + 1 < main_frames) || (idx >= main_frames))
+				{
+					continue; /* not there yet (or main emulator has no frame yet) */
+				}
+				/* reached the last frame of the main emulator: align the stamps */
+				scout_offset = main_stamp[idx % MAIN_STAMPS] - tmp[i].sample;
+				scout_state = SCOUT_SYNCED;
+				continue;
+			}
+			if (idx > vis_pushed)
+			{
+				tmp[i].sample += scout_offset;
+				vis_push (&tmp[i]);
+				vis_pushed = idx;
+			}
+		}
+	}
 }
 
 static void vis_pull (void)
@@ -118,41 +198,20 @@ static void vis_pull (void)
 	{
 		return;
 	}
-	while ((n = gme_vis_read (scout_active ? scoutsession : gmesession, tmp, 64)) > 0)
+	while ((n = gme_vis_read (gmesession, tmp, 64)) > 0)
 	{
 		for (i = 0; i < n; i++)
 		{
-			long idx;
-			if (!vis_layout_done)
+			long idx = main_frames++;
+			main_stamp[idx % MAIN_STAMPS] = tmp[i].sample;
+			if (idx > vis_pushed) /* not given by the scout (behind, stopped, or its track ended) */
 			{
-				if (!tmp[i].system && !tmp[i].chips) tmp[i].chips = vis_chips_header;
-				nsfvis_layout (&vis_layout, &tmp[i]);
-				vis_ring = calloc ((size_t)VIS_RING * vis_layout.count, sizeof (struct nsfvis_ch_t));
-				if (!vis_ring)
-				{
-					vis_enabled = 0;
-					return;
-				}
-				vis_layout_done = 1;
+				vis_push (&tmp[i]);
+				vis_pushed = idx;
 			}
-			/* frames emulated while libgme skipped the initial silence are stamped too late:
-			 * drop them when the timeline goes backwards (they are silent anyway) */
-			while (vis_count && (vis_sample[(vis_first + vis_count - 1) % VIS_RING] >= tmp[i].sample))
-			{
-				vis_count--;
-			}
-			if (vis_count == VIS_RING)
-			{
-				vis_first++;
-				vis_count--;
-			}
-			idx = (vis_first + vis_count) % VIS_RING;
-			nsfvis_decode (&vis_layout, &tmp[i], vis_ring + idx * vis_layout.count);
-			vis_sample[idx] = tmp[i].sample;
-			vis_count++;
-			vis_newdata = 1;
 		}
 	}
+	scout_read ();
 }
 
 static void vis_callback_from_devp (void *arg, int samples_ago)
@@ -249,39 +308,63 @@ OCP_INTERNAL const struct nsfvis_ch_t *gmeVisFrame (long frame)
 	return vis_ring + (frame % VIS_RING) * vis_layout.count;
 }
 
-/* lets the scout catch up to SCOUT_LEAD_SECONDS ahead of the audio, at most half a second of emulation per call */
-static void scout_run (void)
+/* restarts the scout on the current track at the current tempo; it replays the track
+ * silently until it reaches the main emulator (SCOUT_CATCHUP), then goes ahead */
+static void scout_restart (int synced)
 {
-	static short buf[SCOUT_CHUNK * 2];
-	long target = vis_outpos + (long)SCOUT_LEAD_SECONDS * gme_cfg_rate;
-	long budget = gme_cfg_rate / 2;
-
-	if (!scout_active)
+	if (!scoutsession || !vis_enabled)
 	{
 		return;
 	}
-	while ((scout_outpos < target) && (budget > 0) && !gme_track_ended (scoutsession))
+	gme_vis_enable (scoutsession, 0);
+	gme_set_tempo (scoutsession, (double)scout_tempo / 256.0);
+	scout_outpos = 0;
+	scout_frames = 0;
+	scout_offset = 0;
+	scout_state = SCOUT_OFF;
+	if (gme_start_track (scoutsession, gmeactivetrack) || !gme_vis_enable (scoutsession, 1))
 	{
+		scout_failed = 1;
+		return;
+	}
+	scout_failed = 0;
+	scout_state = synced ? SCOUT_SYNCED : SCOUT_CATCHUP;
+}
+
+/* lets the scout run up to SCOUT_LEAD_SECONDS ahead of the audio, at most half a second
+ * of emulation per call (more while catching up, the audio is not waiting for it) */
+static void scout_run (void)
+{
+	static short buf[SCOUT_CHUNK * 2];
+	long budget;
+
+	if (!scoutsession || !vis_enabled)
+	{
+		return;
+	}
+	if ((scout_state == SCOUT_OFF) && !scout_failed && (vis_outpos - scout_tempo_changed > gme_cfg_rate / 2))
+	{ /* tempo stable for half a second (e.g. end of a pause fade): resynchronize */
+		scout_restart (0);
+	}
+	if (scout_state == SCOUT_OFF)
+	{
+		return;
+	}
+	budget = (scout_state == SCOUT_CATCHUP) ? gme_cfg_rate : gme_cfg_rate / 2;
+	while ((budget > 0) && !gme_track_ended (scoutsession) && (scout_state != SCOUT_OFF))
+	{
+		if ((scout_state == SCOUT_SYNCED) && (scout_outpos + scout_offset >= vis_outpos + (long)SCOUT_LEAD_SECONDS * gme_cfg_rate))
+		{
+			break;
+		}
 		if (gme_play (scoutsession, SCOUT_CHUNK * 2, buf))
 		{
+			scout_state = SCOUT_OFF;
 			break;
 		}
 		scout_outpos += SCOUT_CHUNK;
 		budget -= SCOUT_CHUNK;
-	}
-}
-
-/* main emulator collects frames only when there is no scout */
-static void scout_stop (void)
-{
-	if (scout_active)
-	{
-		scout_active = 0;
-		gme_vis_enable (scoutsession, 0);
-		if (vis_enabled)
-		{
-			gme_vis_enable (gmesession, 1);
-		}
+		scout_read (); /* keep the libgme frame ring from overflowing while catching up */
 	}
 }
 
@@ -330,20 +413,7 @@ static const char *gmeStartTrackInternal (int track)
 	{
 		return result;
 	}
-	if (scoutsession && vis_enabled)
-	{
-		scout_outpos = 0;
-		if (gme_start_track (scoutsession, track) || !gme_vis_enable (scoutsession, 1))
-		{
-			scout_stop ();
-		} else {
-			if (!scout_active)
-			{
-				gme_vis_enable (gmesession, 0);
-			}
-			scout_active = 1;
-		}
-	}
+	scout_restart (1); /* both emulators start together: same stamps */
 	if (gmetrackinfo)
 	{
 		gme_free_info (gmetrackinfo);
@@ -634,9 +704,15 @@ static void gmeSetSpeed (uint16_t sp)
 	if (sp < 4)
 		sp = 4;
 	gme_set_tempo (gmesession, (double)sp / 256.0f);
-	if (sp != 256)
-	{
-		scout_stop (); /* frames of the scout would no longer line up; back to the main emulator until the next track */
+	if (sp != scout_tempo)
+	{ /* the scout is ahead and cannot follow; main emulator frames until the tempo is stable again */
+		scout_tempo = sp;
+		scout_tempo_changed = vis_outpos;
+		if (scout_state != SCOUT_OFF)
+		{
+			scout_state = SCOUT_OFF;
+			gme_vis_enable (scoutsession, 0);
+		}
 	}
 }
 
@@ -789,7 +865,9 @@ OCP_INTERNAL int gmeOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 		return errFormMiss;
 	}
 	gme_cfg_rate = gmeRate;
-	scout_active = 0;
+	scout_state = SCOUT_OFF;
+	scout_tempo = 256;
+	scout_tempo_changed = 0;
 	scoutsession = 0;
 	if (cpifaceSession->configAPI->GetProfileBool ("gme", "trackerview", 1, 1) && gme_open_data (data, datalen, &scoutsession, gmeRate))
 	{
@@ -909,7 +987,7 @@ void gmeClosePlayer (struct cpifaceSessionAPI_t *cpifaceSession)
 	vis_ring = 0;
 	vis_count = 0;
 
-	scout_active = 0;
+	scout_state = SCOUT_OFF;
 	if (scoutsession)
 	{
 		gme_delete (scoutsession);
