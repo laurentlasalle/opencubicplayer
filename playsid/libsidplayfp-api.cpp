@@ -19,6 +19,7 @@
  */
 
 #include "libsidplayfp-api.h"
+#include <cstdlib>
 #include <vector>
 #include "sidplayfp/sidbuilder.h"
 #include "sidplayfp/SidInfo.h"

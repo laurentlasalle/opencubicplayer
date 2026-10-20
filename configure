@@ -8036,7 +8036,7 @@ case $target in #(
 		with_update_desktop_database=no
 		HAIKU=1
 	 ;; #(
-  *-mingw*) :
+  *-mingw* | *-windows-gnu*) :
 
 		WINDOWS=1
 		DIRSEPARATOR=\\

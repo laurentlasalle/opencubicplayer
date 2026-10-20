@@ -111,6 +111,8 @@ void lnkCloseAll (void);
 #ifdef SUPPORT_STATIC_PLUGINS
 # ifdef __APPLE__
 #  define DLLEXTINFO_BEGIN_PREFIX const __attribute__ ((section ("__DATA,plugin_list"))) __attribute__ ((used))
+# elif defined(_WIN32)
+#  define DLLEXTINFO_BEGIN_PREFIX const __attribute__ ((section ("plugin_list$m"))) __attribute__ ((used))
 # else
 #  define DLLEXTINFO_BEGIN_PREFIX const __attribute__ ((section ("plugin_list"))) __attribute__ ((used))
 # endif
@@ -121,6 +123,8 @@ void lnkCloseAll (void);
 #ifdef STATIC_CORE
 # ifdef __APPLE__
 #  define DLLEXTINFO_CORE_PREFIX  static const __attribute__ ((section ("__DATA,plugin_list"))) __attribute__ ((used))
+# elif defined(_WIN32)
+#  define DLLEXTINFO_CORE_PREFIX  static const __attribute__ ((section ("plugin_list$m"))) __attribute__ ((used))
 # else
 #  define DLLEXTINFO_CORE_PREFIX  static const __attribute__ ((section ("plugin_list"))) __attribute__ ((used))
 # endif

@@ -483,6 +483,10 @@ void lnkFree(const int id)
 #ifdef __APPLE__
 extern uint8_t section$start$__DATA$plugin_list[];
 extern uint8_t section$end$__DATA$plugin_list[];
+#elif defined(_WIN32)
+/* PE/COFF: grouped sections are sorted by the suffix after '$' and merged, so $a and $z bracket all $m entries */
+static const struct linkinfostruct __attribute__ ((section ("plugin_list$a"))) __attribute__ ((used)) plugin_list_begin_marker = {0};
+static const struct linkinfostruct __attribute__ ((section ("plugin_list$z"))) __attribute__ ((used)) plugin_list_end_marker = {0};
 #else
 extern uint8_t __start_plugin_list[];
 extern uint8_t __stop_plugin_list[];
@@ -493,6 +497,9 @@ static void lnkLoadStatics(void)
 #ifdef __APPLE__
 	const struct linkinfostruct *iterator = (struct linkinfostruct *)section$start$__DATA$plugin_list;
 	const struct linkinfostruct *end      = (struct linkinfostruct *)section$end$__DATA$plugin_list;
+#elif defined(_WIN32)
+	const struct linkinfostruct *iterator = &plugin_list_begin_marker + 1;
+	const struct linkinfostruct *end      = &plugin_list_end_marker;
 #else
 	const struct linkinfostruct *iterator = (struct linkinfostruct *)__start_plugin_list;
 	const struct linkinfostruct *end      = (struct linkinfostruct *)__stop_plugin_list;
