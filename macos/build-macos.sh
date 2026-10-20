@@ -18,7 +18,7 @@ DIST=$WORK/dist
 APP=$WORK/app/Open\ Cubic\ Player.app
 J=${J:-$(sysctl -n hw.ncpu)}
 ARCH=$(uname -m)
-export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-14.0}
+export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-15.0}
 
 # same pinned sources as the Windows build
 GME_REPO=$(sed -n 's/^GME_REPO=\${GME_REPO:-\([^}]*\)}.*/\1/p' $OCP_SRC/windows/config.sh)
