@@ -33,7 +33,7 @@ jobs:
         run: |
           macos/build-macos.sh | tee "$RUNNER_TEMP/build.txt"
           echo "zip=$(tail -1 "$RUNNER_TEMP/build.txt")" >> "$GITHUB_OUTPUT"
-          echo "::notice title=bundle::$(grep -E '^(bundled|plugins|launch test)' "$RUNNER_TEMP/build.txt" | tr '\n' ' ')"
+          echo "::notice title=bundle::$(grep -E '^(bundled|plugins|launch test|plugin load)' "$RUNNER_TEMP/build.txt" | tr '\n' ' ')"
 
       - name: Logs on failure
         if: failure()

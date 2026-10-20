@@ -192,6 +192,33 @@ echo "plugins: $(ls "$RES/autoload" | wc -l | tr -d ' '), frameworks: $(ls "$APP
 find "$APP" -type f \( -name "*.dylib" -o -perm -u+x \) | while read -r f; do
 	if file "$f" | grep -q Mach-O; then codesign --force --sign - "$f" 2> /dev/null; fi
 done
+
+# load libocp and every plugin like OCP does (the test program must sit in Contents/MacOS for
+# the @executable_path references); any dlopen error stops the build
+cat > $BUILD/plugtest.c <<'EOF2'
+#include <dlfcn.h>
+#include <stdio.h>
+int main (int argc, char **argv)
+{
+	int i, bad = 0;
+	for (i = 1; i < argc; i++)
+	{
+		if (!dlopen (argv[i], RTLD_NOW | RTLD_GLOBAL))
+		{
+			printf ("plugin load FAILED: %s\n", dlerror ());
+			bad = 1;
+		}
+	}
+	return bad;
+}
+EOF2
+cc -o "$APP/Contents/MacOS/plugtest" $BUILD/plugtest.c
+if ! "$APP/Contents/MacOS/plugtest" "$RES/libocp.dylib" "$RES"/autoload/*.dylib; then
+	rm -f "$APP/Contents/MacOS/plugtest"; exit 1
+fi
+rm -f "$APP/Contents/MacOS/plugtest"
+echo "plugins loaded ok"
+
 codesign --force --sign - "$APP"
 codesign --verify --verbose "$APP" || true
 
