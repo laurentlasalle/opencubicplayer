@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "types.h"
+#include "omni-version.h"
 #include "boot/plinkman.h"
 #include "boot/psetting.h"
 #include "dirdb.h"
@@ -162,7 +163,7 @@ int mdbInfoIsAvailable (uint32_t mdb_ref)
 		if (mdbData[mdb_ref].mie.general.lastscanversion[1] < OCP_MINOR_VERSION) return 0;
 		if (mdbData[mdb_ref].mie.general.lastscanversion[1] > OCP_MINOR_VERSION) return 1;
 
-		if (mdbData[mdb_ref].mie.general.lastscanversion[2] < OCP_PATCH_VERSION) return 0;
+		if (mdbData[mdb_ref].mie.general.lastscanversion[2] < OCP_SCAN_PATCH_VERSION) return 0;
 		return 1; /* >= is always true here */
 	}
 
@@ -490,7 +491,7 @@ int mdbWriteModuleInfo (uint32_t mdb_ref, struct moduleinfostruct *m)
 	{ /* tag the version number to disk */
 		mdbData[mdb_ref].mie.general.lastscanversion[0] = OCP_MAJOR_VERSION;
 		mdbData[mdb_ref].mie.general.lastscanversion[1] = OCP_MINOR_VERSION;
-		mdbData[mdb_ref].mie.general.lastscanversion[2] = OCP_PATCH_VERSION;
+		mdbData[mdb_ref].mie.general.lastscanversion[2] = OCP_SCAN_PATCH_VERSION;
 	}
 
 	mdbDirty=1;

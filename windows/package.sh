@@ -5,7 +5,8 @@
 #   files that differ, so an existing installation can be updated in place.
 set -e
 . "$(dirname "$0")/config.sh"
-VERSION=$(sed -n 's/^PACKAGE_VERSION=.\([0-9.]*\).$/\1/p' $OCP_SRC/configure)
+# <upstream OCP version>-omni.<Omni release>, e.g. 3.5.0-omni.7
+VERSION=$(sed -n 's/^PACKAGE_VERSION=.\([0-9.]*\).$/\1/p' $OCP_SRC/configure)-omni.$(sed -n 's/^#define OMNI_VERSION \([0-9]*\)$/\1/p' $OCP_SRC/omni-version.h)
 mkdir -p $DIST
 
 python3 - "$INSTALL" "$PREFIX/bin" "$PREFIX/lib" "$TC/$HOST/bin" <<'PY'

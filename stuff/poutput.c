@@ -42,6 +42,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "types.h"
+#include "omni-version.h"
 #include "imsrtns.h"
 #include "framelock.h"
 #include "pfonts.h"
@@ -61,10 +62,24 @@ void make_title (const char *part, int escapewarning)
 {
 	char prebuf[32];
 	char buf[CONSOLE_MAX_X];
-	const char *title = "Open Cubic Player v" VERSION;
+	const char *title = "Open Cubic Player v" VERSION " - Omni v" OMNI_VERSION_STRING;
 	const char *copyright = "(c) 1994-'26 Stian Skjelstad";
 
 	int spacem = plScrWidth - 2 - strlen (title) - strlen (copyright) - 2 - strlen (part);
+	if (spacem < 2)
+	{ /* narrow screen: shorter copyright, then none */
+		copyright = "(c) Stian Skjelstad";
+		spacem = plScrWidth - 2 - strlen (title) - strlen (copyright) - 2 - strlen (part);
+		if (spacem < 2)
+		{
+			copyright = "";
+			spacem = plScrWidth - 2 - strlen (title) - 2 - strlen (part);
+		}
+		if (spacem < 0)
+		{
+			spacem = 0;
+		}
+	}
 	int space1 = spacem / 2;
 	int space2 = spacem - space1;
 

@@ -1,3 +1,24 @@
+# Open Cubic Player — Omni
+
+> **This is Omni, an unofficial fork of [Open Cubic Player](https://github.com/mywave82/opencubicplayer) by Stian Skjelstad, with a ready-to-use Windows x64 build.**
+> Please report problems with Omni [here](https://github.com/laurentlasalle/opencubicplayer/issues), not to the upstream project.
+
+Omni releases are named `<upstream version>-omni.<release>` (for example `3.5.0-omni.7`) and are available on the [Releases](https://github.com/laurentlasalle/opencubicplayer/releases) page.
+The title bar shows `Open Cubic Player v3.5.0 - Omni v7`.
+
+What Omni adds to upstream:
+
+- **Tracker view for chiptunes**: NSF/NSFe (NES, with VRC6, VRC7, FDS, MMC5, N163 and Sunsoft 5B), HES (PC Engine) and GBS (Game Boy) files are shown as a pattern view rebuilt from the sound chip registers, synchronized with the audio, with per-channel muting. This uses the visualisation API of the [Omni fork of game-music-emu](https://github.com/laurentlasalle/game-music-emu/tree/ocp).
+- **S98 player** (NEC PC-88/PC-98, Sharp X1/X68000) based on [libvgm](https://github.com/ValleyBell/libvgm).
+- **Track length, loops and fade-out** for Game Music Emu formats that do not store a length (plain NSF, GBS, KSS...), and a `setup:/gmeconfig.dev` dialog.
+- **Automatic advance** to the next file of the directory when a file ends.
+- **Integer HiDPI scaling** of the SDL3 window, following the scale of the screen it is on.
+- **Windows**: GUI application (no console window), automatic log file with timestamped startup steps, and scripts to cross-compile the Windows release from Linux with llvm-mingw ([windows/](windows/), see [README-Windows.txt](windows/README-Windows.txt)).
+
+The upstream README follows.
+
+---
+
 # Open Cubic Player
 
 Unix port of [Open Cubic Player](https://www.cubic.org/player/), which is a text-based player with some few graphical views.

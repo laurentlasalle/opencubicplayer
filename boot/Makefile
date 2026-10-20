@@ -52,6 +52,7 @@ endif
 
 kickload.o: $(KICKLOAD_C) \
 	../config.h \
+	../omni-version.h \
 	../types.h \
 	../boot/pmain.h \
 	../boot/console.h \

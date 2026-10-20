@@ -1,7 +1,12 @@
-Open Cubic Player 3.5.7 - custom Windows x64 build
-===================================================
-Based on Open Cubic Player 3.5.0 (git master of 2026-10-17,
-https://github.com/mywave82/opencubicplayer) with the changes listed below.
+Open Cubic Player v3.5.0 - Omni v7 (unofficial Windows x64 build)
+==================================================================
+Omni is an unofficial build of Open Cubic Player by Stian Skjelstad
+(https://github.com/mywave82/opencubicplayer), based on its git master of
+2026-10-17 (version 3.5.0), with the extra features listed below.
+Source and releases: https://github.com/laurentlasalle/opencubicplayer
+Please report problems of this build there, not to the upstream project.
+
+Versions are named <upstream version>-omni.<release>, e.g. 3.5.0-omni.7.
 
 Start: double-click ocp.exe (SDL3 window, no console window).
 Requires Windows 10 or 11, 64-bit.
@@ -119,35 +124,38 @@ If ocp.exe reports that VCRUNTIME140.dll is missing, install the
 
 Release history
 ---------------
-3.5.7 (2026-10-19)
+Omni v1 to v6 were distributed as "3.5.1" to "3.5.6".
+Omni v7 (3.5.0-omni.7, 2026-10-19)
+ - Versions named <upstream version>-omni.<release>; OCP itself reports the
+   upstream version again (3.5.0), the title bar shows "Omni v7"
  - Documentation and log messages in English; source published on GitHub
-3.5.6 (2026-10-19)
+Omni v6 (2026-10-19)
  - Tracker view also for HES (PC Engine) and GBS (Game Boy)
  - Vibrato and portamento: indicator only, no repeated notes
-3.5.5 (2026-10-19)
+Omni v5 (2026-10-19)
  - NSF tracker view no longer freezes after several files in a row
  - Columns stretched over the full width, according to the channel count
  - Pitch slide indicator (^ v ~) in each cell
-3.5.4 (2026-10-19)
+Omni v4 (2026-10-19)
  - Tracker view for NSF/NSFe, synchronized with the sound (trackerview, rowframes)
  - Mute/unmute voices (keys 1-9) for all GME formats
  - Setup dialog setup:gmeconfig.dev (tracker view, length, loops, fade)
  - libgme.dll: reads the NSF sound registers (see notes)
-3.5.3 (2026-10-19)
+Omni v3 (2026-10-19)
  - ocp.exe without console window (Windows GUI application)
  - Automatic log ocp-log.txt / ocp-log-previous.txt with timestamped steps
  - ocp-journal.bat removed (replaced by the automatic log)
-3.5.2 (2026-10-18)
+Omni v2 (2026-10-18)
  - New S98 player (plays98) based on libvgm: PC-88/PC-98, X1, X68000
  - [s98] section in ocp.ini (loops, fade)
-3.5.1 (2026-10-18)
+Omni v1 (2026-10-18)
  - HiDPI scaling: x2 on a 2160p screen, follows screen changes (sdlscale)
  - 80x30 mode by default (screentype=1), mode comments fixed
  - GME (NSF, GBS, KSS, VGM...): default length, loops and fade ([gme])
  - Keys < and >: fixed for the first and last track of a file
  - Automatic advance to the next file of a directory (autonext)
 3.5.0
- - First Windows build (cross-compiled with llvm-mingw)
+ - First Windows build of upstream 3.5.0 (cross-compiled with llvm-mingw)
 
 Build notes
 -----------
@@ -174,6 +182,8 @@ build-deps.sh, build-ocp.sh, package.sh). Changes to the upstream sources:
    95-plays98.dll. libvgm has no global license: each emulation core has
    its own (MAME BSD/GPL, Nuked LGPL...). Check before redistributing.
  - ocp.ini: screentype=1, autonext, [gme] and [s98] sections
+ - omni-version.h (new): Omni release number, shown in the title bar;
+   filesel/mdb.c rescans files of unknown type after an Omni update
  - libgme (game-music-emu, separate repository): new API gme_vis_enable /
    gme_vis_read (NSF, HES, GBS) that copies the sound chip registers once per
    frame

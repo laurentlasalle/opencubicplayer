@@ -57,6 +57,7 @@
 #include "boot/console.h"
 #include "stuff/poutput.h"
 #include "stuff/utf-16.h"
+#include "omni-version.h"
 #include "stuff/milestone.h"
 #include <wchar.h>
 
@@ -586,7 +587,7 @@ int main(int argc, char *argv[])
 	{
 		setup_logfile (wt);
 	}
-	ocp_milestone ("Open Cubic Player " PACKAGE_VERSION " - start");
+	ocp_milestone ("Open Cubic Player " PACKAGE_VERSION " - Omni v" OMNI_VERSION_STRING " - start");
 
 	if (GetConsoleWindow ())
 	{

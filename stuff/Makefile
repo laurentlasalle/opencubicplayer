@@ -74,6 +74,7 @@ piperun-windows.o: piperun-windows.c \
 
 poutput.o: poutput.c \
 	../config.h \
+	../omni-version.h \
 	../types.h \
 	imsrtns.h \
 	framelock.h \

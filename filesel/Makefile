@@ -421,6 +421,7 @@ filesystem-z.o: filesystem-z.c \
 
 mdb.o: mdb.c \
 	../config.h \
+	../omni-version.h \
 	../types.h \
 	../boot/plinkman.h \
 	../boot/psetting.h \
