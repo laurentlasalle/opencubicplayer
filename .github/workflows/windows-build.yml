@@ -1,9 +1,9 @@
 name: Windows x64 build
 
 on:
-  push:
-    tags: ['v*']
-  workflow_dispatch:
+  release:
+    types: [published]    # publish a release (tag v<upstream>-omni.<n>) on GitHub to build and attach the zip
+  workflow_dispatch:      # manual build, zip available as an artifact
 
 jobs:
   build:
@@ -50,7 +50,7 @@ jobs:
           path: ${{ steps.package.outputs.zip }}
 
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.package.outputs.zip }}

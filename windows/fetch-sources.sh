@@ -43,5 +43,5 @@ clone_commit https://github.com/autoconf-archive/autoconf-archive 92c33ce5c3eeab
 clone_commit https://github.com/win-iconv/win-iconv 70a279dcfe6318bbe63e019e33b3230b55c19762 win-iconv
 dl https://github.com/dbry/WavPack/releases/download/5.9.0/wavpack-5.9.0.tar.xz wavpack-5.9.0.tar.xz
 clone_commit https://github.com/ValleyBell/libvgm a6eed945ecf4e5a25cf82004779c6f7e4fd5c319 libvgm
-clone "$GME_REPO" "$GME_REF" game-music-emu
+clone_commit "$GME_REPO" "$GME_REF" game-music-emu
 echo "sources ready in $SRC"
