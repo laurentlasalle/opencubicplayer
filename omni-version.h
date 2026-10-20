@@ -5,7 +5,7 @@
  * The OCP version (configure.ac) stays the upstream one; Omni releases are
  * numbered separately and published as <upstream version>-omni.<n>,
  * e.g. 3.5.0-omni.7. Restart at 1 when moving to a new upstream version. */
-#define OMNI_VERSION 7
+#define OMNI_VERSION 8
 
 #define OMNI_STR_(x) #x
 #define OMNI_STR(x) OMNI_STR_(x)

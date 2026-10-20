@@ -1,4 +1,4 @@
-Open Cubic Player v3.5.0 - Omni v7 (unofficial Windows x64 build)
+Open Cubic Player v3.5.0 - Omni v8 (unofficial Windows x64 build)
 ==================================================================
 Omni is an unofficial build of Open Cubic Player by Stian Skjelstad
 (https://github.com/mywave82/opencubicplayer), based on its git master of
@@ -6,7 +6,7 @@ Omni is an unofficial build of Open Cubic Player by Stian Skjelstad
 Source and releases: https://github.com/laurentlasalle/opencubicplayer
 Please report problems of this build there, not to the upstream project.
 
-Versions are named <upstream version>-omni.<release>, e.g. 3.5.0-omni.7.
+Versions are named <upstream version>-omni.<release>, e.g. 3.5.0-omni.8.
 
 Start: double-click ocp.exe (SDL3 window, no console window).
 Requires Windows 10 or 11, 64-bit.
@@ -24,7 +24,7 @@ warning at the top.
 
 Window size / 1080p and 2160p screens
 -------------------------------------
-Default: 80 columns x 30 rows (8x16 font, 640x480 at scale 1).
+Default: 128 columns x 48 rows (8x16 font, 1024x768 at scale 1).
 The window is enlarged by an integer factor according to the Windows display
 scaling of the screen it is on: 100-125 % -> x1, 150-249 % -> x2,
 250 % and more -> x3. When the window is moved from a 1080p screen (100 %)
@@ -125,6 +125,11 @@ If ocp.exe reports that VCRUNTIME140.dll is missing, install the
 Release history
 ---------------
 Omni v1 to v6 were distributed as "3.5.1" to "3.5.6".
+Omni v8 (3.5.0-omni.8)
+ - Tracker view: the upcoming rows are filled in advance (a second, silent
+   emulator runs a few seconds ahead of the audio)
+ - Channel names in the column header of the tracker view, shorter title
+ - 128x48 text mode by default (screentype=4)
 Omni v7 (3.5.0-omni.7, 2026-10-19)
  - Versions named <upstream version>-omni.<release>; OCP itself reports the
    upstream version again (3.5.0), the title bar shows "Omni v7"
@@ -181,7 +186,7 @@ build-deps.sh, build-ocp.sh, package.sh). Changes to the upstream sources:
  - plays98/ (new): S98 player; libvgm is linked statically into
    95-plays98.dll. libvgm has no global license: each emulation core has
    its own (MAME BSD/GPL, Nuked LGPL...). Check before redistributing.
- - ocp.ini: screentype=1, autonext, [gme] and [s98] sections
+ - ocp.ini: screentype=4 (128x48), autonext, [gme] and [s98] sections
  - omni-version.h (new): Omni release number, shown in the title bar;
    filesel/mdb.c rescans files of unknown type after an Omni update
  - libgme (game-music-emu, separate repository): new API gme_vis_enable /
