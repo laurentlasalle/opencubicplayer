@@ -70,8 +70,10 @@ if ! test -f $PREFIX/.libvgm-$LIBVGM_REF; then
 fi
 
 step "Open Cubic Player"
-# Installed flat into Contents/Resources (the loader looks there first, see boot/kickload-unix.c);
-# the executable is then moved to Contents/MacOS.
+# Installed flat into $STAGE (OCP's install rules do not support spaces in paths), then copied
+# into Contents/Resources (the loader looks there first, see boot/kickload-unix.c); the
+# executable goes to Contents/MacOS.
+STAGE=$WORK/stage
 RES="$APP/Contents/Resources"
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$BREW/lib/pkgconfig
 export PATH=$BREW/bin:$PATH
@@ -83,19 +85,20 @@ make distclean > /dev/null 2>&1 || true
 	CXXFLAGS="-I$PREFIX/include -I$BREW/include -O2" \
 	CPPFLAGS="-I$PREFIX/include -I$BREW/include" \
 	LDFLAGS="-L$PREFIX/lib -L$BREW/lib -Wl,-headerpad_max_install_names" \
-	LIBDIROCP="$RES" DATADIROCP="$RES" \
-	--prefix="$RES" --bindir="$RES" --libdir="$RES" --datadir="$RES" --datarootdir="$RES" \
-	--sysconfdir="$RES" --docdir="$RES/doc" --mandir="$RES/man" \
+	LIBDIROCP="$STAGE" DATADIROCP="$STAGE" \
+	--prefix="$STAGE" --bindir="$STAGE" --libdir="$STAGE" --datadir="$STAGE" --datarootdir="$STAGE" \
+	--sysconfdir="$STAGE" --docdir="$STAGE/doc" --mandir="$STAGE/man" \
 	--without-x11 --without-info --without-update-mime-database --without-desktop_file_install \
 	--without-update-desktop-database --with-unifont-relative > $BUILD/ocp-configure.log 2>&1 \
 	|| { tail -40 $BUILD/ocp-configure.log; exit 1; }
 grep -E "^(  |)(SDL|libgme|game-music|S98|vgm|coreaudio|CoreAudio)" -i $BUILD/ocp-configure.log | head -20 || true
 make -j$J all > $BUILD/ocp-make.log 2>&1 || { grep -n -B2 -A6 "error" $BUILD/ocp-make.log | tail -60; exit 1; }
-rm -rf "$WORK/app"
+rm -rf "$WORK/app" "$STAGE"
 make install > $BUILD/ocp-install.log 2>&1 || { tail -30 $BUILD/ocp-install.log; exit 1; }
 
 step "Application bundle"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks"
+ditto "$STAGE" "$RES"
 mv "$RES/ocp" "$APP/Contents/MacOS/ocp"
 rm -rf "$RES"/ocp-* "$RES/icons" "$RES/mime" "$RES/applications" "$RES/man" "$RES/info"
 
