@@ -11,7 +11,7 @@ jobs:
     permissions:
       contents: write
     env:
-      WORK: ${{ github.workspace }}/../work
+      WORK: ${{ github.workspace }}/.work   # absolute path without "..", required by upload-artifact
     steps:
       - uses: actions/checkout@v4
         with:
@@ -26,9 +26,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ${{ github.workspace }}/../work/tc
-            ${{ github.workspace }}/../work/src
-            ${{ github.workspace }}/../work/prefix
+            .work/tc
+            .work/src
+            .work/prefix
           key: deps-${{ hashFiles('windows/config.sh', 'windows/fetch-sources.sh', 'windows/build-deps.sh') }}
 
       - name: Fetch sources
