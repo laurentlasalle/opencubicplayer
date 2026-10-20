@@ -22,6 +22,8 @@ jobs:
       VERSION_SUFFIX: ${{ github.event_name == 'push' && '-test4' || github.event.inputs.suffix }}
       HOMEBREW_NO_AUTO_UPDATE: 1
       HOMEBREW_NO_INSTALL_CLEANUP: 1
+      HOMEBREW_NO_EMOJI: 1
+      HOMEBREW_NO_COLOR: 1
     steps:
       - uses: actions/checkout@v4
         with:
