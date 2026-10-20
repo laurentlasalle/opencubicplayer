@@ -483,8 +483,10 @@ void lnkFree(const int id)
 
 /* special symbols maintained by linkers, marking the boundaries of sections */
 #ifdef __APPLE__
-extern uint8_t section$start$__DATA$plugin_list[];
-extern uint8_t section$end$__DATA$plugin_list[];
+/* Not section$start$__DATA$plugin_list / section$end$...: the current Apple linker leaves them
+ * undefined in libocp (linked with -undefined dynamic_lookup), so dlopen fails. Ask dyld for the
+ * section of the image containing this code instead. */
+# include <mach-o/getsect.h>
 #elif defined(_WIN32)
 /* PE/COFF: grouped sections are sorted by the suffix after '$' and merged, so $a and $z bracket all $m entries */
 static const struct linkinfostruct __attribute__ ((section ("plugin_list$a"))) __attribute__ ((used)) plugin_list_begin_marker = {0};
@@ -497,8 +499,17 @@ extern uint8_t __stop_plugin_list[];
 static void lnkLoadStatics(void)
 {
 #ifdef __APPLE__
-	const struct linkinfostruct *iterator = (struct linkinfostruct *)section$start$__DATA$plugin_list;
-	const struct linkinfostruct *end      = (struct linkinfostruct *)section$end$__DATA$plugin_list;
+	unsigned long size = 0;
+	Dl_info info;
+	const uint8_t *data = 0;
+	const struct linkinfostruct *iterator;
+	const struct linkinfostruct *end;
+	if (dladdr ((void *)lnkLoadStatics, &info) && info.dli_fbase)
+	{
+		data = getsectiondata ((const struct mach_header_64 *)info.dli_fbase, "__DATA", "plugin_list", &size);
+	}
+	iterator = (const struct linkinfostruct *)data;
+	end      = (const struct linkinfostruct *)(data ? data + size : 0);
 #elif defined(_WIN32)
 	const struct linkinfostruct *iterator = &plugin_list_begin_marker + 1;
 	const struct linkinfostruct *end      = &plugin_list_end_marker;
