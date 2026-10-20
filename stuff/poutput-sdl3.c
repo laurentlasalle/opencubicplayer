@@ -101,6 +101,36 @@ static SDL_Texture *current_texture = NULL;
 static int last_text_height;
 static int last_text_width;
 
+/* HiDPI: integer pixel scale. Logical sizes (Console.GraphBytesPerLine/GraphLines,
+ * last_text_*, winwidth/winheight) are in unscaled pixels; the window is scale times larger
+ * and the framebuffer texture is upscaled with nearest-neighbour filtering. */
+static int sdl3_scale = 1;
+static int sdl3_scale_forced = 0; /* ocp.ini [screen] sdlscale=, 0 = follow the display scale */
+
+static int sdl3_compute_scale (SDL_Window *window)
+{
+	float s;
+	int r;
+	if (sdl3_scale_forced > 0)
+	{
+		return sdl3_scale_forced;
+	}
+	if (window)
+	{
+		s = SDL_GetWindowDisplayScale (window);
+	} else {
+		s = SDL_GetDisplayContentScale (SDL_GetPrimaryDisplay ());
+	}
+	if (!(s > 0.0f))
+	{
+		s = 1.0f;
+	}
+	r = (int)(s + 0.5f); /* 100%/125% -> 1, 150%..249% -> 2, 250%.. -> 3 */
+	if (r < 1) r = 1;
+	if (r > 8) r = 8;
+	return r;
+}
+
 static int cachemode = -1;
 
 static void (*set_state)(const int fullscreen, int width, int height, const int window_resized) = 0;
@@ -273,14 +303,27 @@ static void set_state_textmode (const int fullscreen, int width, int height, con
 		} else {
 			if (!current_window)
 			{
+				int newscale;
+				sdl3_scale = sdl3_compute_scale (0);
 				current_window = SDL_CreateWindow ("Open Cubic Player",
-				                                   width, height,
+				                                   width * sdl3_scale, height * sdl3_scale,
 				                                   SDL_WINDOW_RESIZABLE);
-				SDL_StartTextInput (current_window);
+				ocp_milestone ("[SDL] window %dx%d (scale %d) %s", width, height, sdl3_scale, current_window ? "created" : "failed");
+				if (current_window)
+				{
+					SDL_StartTextInput (current_window);
+					newscale = sdl3_compute_scale (current_window); /* window might have opened on another display */
+					if (newscale != sdl3_scale)
+					{
+						sdl3_scale = newscale;
+						SDL_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
+					}
+				}
 			} else {
+				sdl3_scale = sdl3_compute_scale (current_window);
 				SDL_SetWindowFullscreen (current_window, 0);
 				SDL_SetWindowResizable (current_window, true);
-				SDL_SetWindowSize (current_window, width, height);
+				SDL_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
 			}
 		}
 	}
@@ -292,7 +335,10 @@ static void set_state_textmode (const int fullscreen, int width, int height, con
 		exit(1);
 	}
 
-	SDL_GetWindowSize (current_window, &width, &height);
+	sdl3_scale = sdl3_compute_scale (current_window);
+	SDL_GetWindowSizeInPixels (current_window, &width, &height);
+	width  /= sdl3_scale;
+	height /= sdl3_scale;
 
 	while ( ((width/FontSizeInfo[Console.CurrentFont].w) < CONSOLE_MIN_X) || ((height/FontSizeInfo[Console.CurrentFont].h) < CONSOLE_MIN_Y))
 	{
@@ -318,7 +364,7 @@ static void set_state_textmode (const int fullscreen, int width, int height, con
 #endif
 					width  = FontSizeInfo[Console.CurrentFont].w * CONSOLE_MIN_X;
 					height = FontSizeInfo[Console.CurrentFont].h * CONSOLE_MIN_Y;
-					SDL_SetWindowSize (current_window, width, height);
+					SDL_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
 				} else {
 					fprintf(stderr, "             unable to find a small enough font for %d x %d\n", width, height);
 					exit(-1);
@@ -347,8 +393,12 @@ static void set_state_textmode (const int fullscreen, int width, int height, con
 			sdl3_dump_renderer();
 		}
 
-		/* This call does nothing until we have a renderer, so that is why we waited until now */
-		SDL_SetWindowMinimumSize (current_window, FontSizeInfo[0].w * CONSOLE_MIN_X, FontSizeInfo[0].h * CONSOLE_MIN_Y);
+	}
+
+	/* This call does nothing until we have a renderer, so that is why we waited until now */
+	if (!fullscreen)
+	{
+		SDL_SetWindowMinimumSize (current_window, FontSizeInfo[0].w * CONSOLE_MIN_X * sdl3_scale, FontSizeInfo[0].h * CONSOLE_MIN_Y * sdl3_scale);
 	}
 
 	if (!current_texture)
@@ -518,14 +568,27 @@ static void set_state_graphmode (const int fullscreen, int width, int height, co
 		} else {
 			if (!current_window)
 			{
+				int newscale;
+				sdl3_scale = sdl3_compute_scale (0);
 				current_window = SDL_CreateWindow ("Open Cubic Player",
-			                                           width, height,
+			                                           width * sdl3_scale, height * sdl3_scale,
 			                                           0);
-				SDL_StartTextInput (current_window);
+				if (current_window)
+				{
+					SDL_StartTextInput (current_window);
+					newscale = sdl3_compute_scale (current_window);
+					if (newscale != sdl3_scale)
+					{
+						sdl3_scale = newscale;
+						SDL_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
+					}
+				}
 			} else {
+				sdl3_scale = sdl3_compute_scale (current_window);
 				SDL_SetWindowFullscreen (current_window, 0);
 				SDL_SetWindowResizable (current_window, false);
-				SDL_SetWindowSize (current_window, width, height);
+				SDL_SetWindowMinimumSize (current_window, 0, 0);
+				SDL_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
 			}
 		}
 	}
@@ -1206,7 +1269,22 @@ static void RefreshScreenGraph(void)
 
 	SDL_UnlockTexture (current_texture);
 
-	SDL_RenderTexture (current_renderer, current_texture, NULL, NULL);
+	SDL_SetTextureScaleMode (current_texture, SDL_SCALEMODE_NEAREST);
+	if ((set_state == set_state_graphmode) && current_fullsceen)
+	{
+		SDL_RenderTexture (current_renderer, current_texture, NULL, NULL); /* stretch, as before */
+	} else {
+		float tw, th;
+		SDL_FRect dst;
+		SDL_GetTextureSize (current_texture, &tw, &th);
+		dst.x = 0;
+		dst.y = 0;
+		dst.w = tw * sdl3_scale;
+		dst.h = th * sdl3_scale;
+		SDL_SetRenderDrawColor (current_renderer, 0, 0, 0, 255);
+		SDL_RenderClear (current_renderer);
+		SDL_RenderTexture (current_renderer, current_texture, NULL, &dst);
+	}
 	SDL_RenderPresent (current_renderer);
 
 	if (Console.CurrentFont == _8x8)
@@ -1271,6 +1349,35 @@ static int ekbhit_sdl3dummy(void)
 				break;
 			}
 
+			case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
+			{
+#ifdef SDL3_DEBUG
+				fprintf(stderr, "[SDL3-video] SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED\n");
+#endif
+				if (current_window && (SDL_GetWindowID(current_window) == event.window.windowID) && set_state)
+				{
+					int newscale = sdl3_compute_scale (current_window);
+					if (newscale != sdl3_scale)
+					{
+						/* keep the same number of columns/rows (or the same graphic mode), just resize the window */
+						int lw = Console.GraphBytesPerLine;
+						int lh = Console.GraphLines;
+						sdl3_scale = newscale;
+						if (!current_fullsceen)
+						{
+							if (set_state == set_state_textmode)
+							{
+								SDL_SetWindowMinimumSize (current_window, FontSizeInfo[0].w * CONSOLE_MIN_X * sdl3_scale, FontSizeInfo[0].h * CONSOLE_MIN_Y * sdl3_scale);
+							}
+							SDL_SetWindowSize (current_window, lw * sdl3_scale, lh * sdl3_scale);
+						} else {
+							set_state (current_fullsceen, lw, lh, 1);
+						}
+					}
+				}
+				break;
+			}
+
 			case SDL_EVENT_WINDOW_RESIZED:
 			{
 #ifdef SDL3_DEBUG
@@ -1292,14 +1399,19 @@ static int ekbhit_sdl3dummy(void)
 #endif
 				if (current_window && (SDL_GetWindowID(current_window) == event.window.windowID))
 				{
+					int lw, lh;
 					Console.CurrentFont = sdl3_CurrentFontWanted;
+
+					sdl3_scale = sdl3_compute_scale (current_window);
+					lw = event.window.data1 / sdl3_scale;
+					lh = event.window.data2 / sdl3_scale;
 
 					if (!current_fullsceen && (Console.CurrentMode == Console.LastTextMode ))
 					{
-						last_text_height = event.window.data2;
-						last_text_width = event.window.data1;
+						last_text_height = lh;
+						last_text_width = lw;
 					}
-					set_state (current_fullsceen, event.window.data1, event.window.data2, 1);
+					set_state (current_fullsceen, lw, lh, 1);
 				} else {
 #ifdef SDL3_DEBUG
 					fprintf (stderr, "[SDL3-video] we ignored that event, it does not belong to our window...\n");
@@ -1620,6 +1732,7 @@ int sdl3_init(void)
 	SDL_SetEventEnabled (SDL_EVENT_WINDOW_CLOSE_REQUESTED, true);
 	SDL_SetEventEnabled (SDL_EVENT_WINDOW_RESIZED, true);
 	SDL_SetEventEnabled (SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED, true);
+	SDL_SetEventEnabled (SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED, true);
 	SDL_SetEventEnabled (SDL_EVENT_MOUSE_BUTTON_DOWN, true);
 	SDL_SetEventEnabled (SDL_EVENT_MOUSE_WHEEL, true);
 	SDL_SetEventEnabled (SDL_EVENT_TEXT_EDITING, true);
@@ -1638,6 +1751,7 @@ int sdl3_init(void)
 	last_text_width  = Console.GraphBytesPerLine = saturate(cfGetProfileInt(cfScreenSec, "winwidth",  1280, 10), 640, 16384);
 	last_text_height = Console.GraphLines        = saturate(cfGetProfileInt(cfScreenSec, "winheight", 1024, 10), 400, 16384);
 	Console.LastTextMode = Console.CurrentMode = cfGetProfileInt(cfScreenSec, "screentype", 8, 10);
+	sdl3_scale_forced = saturate(cfGetProfileInt(cfScreenSec, "sdlscale", 0, 10), 0, 8);
 
 	need_quit = 1;
 
