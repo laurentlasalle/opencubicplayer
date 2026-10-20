@@ -215,6 +215,52 @@ static uint32_t sdl3_palette[256] = {
 
 static uint8_t *virtual_framebuffer = 0;
 
+#ifdef __APPLE__
+/* macOS does not remember window positions for us (Windows does): [screen] sdlwindowpos=x,y
+ * is restored when the window is created and stored when OCP closes. Without a valid position
+ * (none yet, or no longer on a connected display), the window is centered. */
+static int sdl3_win_x, sdl3_win_y, sdl3_win_pos_known;
+
+static void sdl3_remember_position (void)
+{
+	if (current_window && !current_fullsceen)
+	{
+		if (SDL_GetWindowPosition (current_window, &sdl3_win_x, &sdl3_win_y))
+		{
+			sdl3_win_pos_known = 1;
+		}
+	}
+}
+
+static void sdl3_place_window (void)
+{
+	const char *s = cfGetProfileString (cfScreenSec, "sdlwindowpos", "");
+	int x, y;
+	if (s && (sscanf (s, "%d,%d", &x, &y) == 2))
+	{
+		int i, n = 0;
+		SDL_DisplayID *displays = SDL_GetDisplays (&n);
+		for (i = 0; displays && (i < n); i++)
+		{
+			SDL_Rect r;
+			if (SDL_GetDisplayUsableBounds (displays[i], &r) &&
+			    (x + 16 >= r.x) && (x + 16 < r.x + r.w) &&
+			    (y + 16 >= r.y) && (y + 16 < r.y + r.h))
+			{
+				SDL_free (displays);
+				SDL_SetWindowPosition (current_window, x, y);
+				return;
+			}
+		}
+		SDL_free (displays);
+	}
+	SDL_SetWindowPosition (current_window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+}
+#else
+# define sdl3_remember_position()
+# define sdl3_place_window()
+#endif
+
 static void sdl3_close_window(void)
 {
 #ifdef SDL3_DEBUG
@@ -232,6 +278,7 @@ static void sdl3_close_window(void)
 	}
 	if (current_window)
 	{
+		sdl3_remember_position ();
 		SDL_StopTextInput (current_window);
 		SDL_DestroyWindow (current_window);
 		current_window = 0;
@@ -365,6 +412,7 @@ static void set_state_textmode (const int fullscreen, int width, int height, con
 						sdl3_scale = newscale;
 						sdl3_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
 					}
+					sdl3_place_window ();
 				}
 			} else {
 				sdl3_scale = sdl3_compute_scale (current_window);
@@ -629,6 +677,7 @@ static void set_state_graphmode (const int fullscreen, int width, int height, co
 						sdl3_scale = newscale;
 						sdl3_SetWindowSize (current_window, width * sdl3_scale, height * sdl3_scale);
 					}
+					sdl3_place_window ();
 				}
 			} else {
 				sdl3_scale = sdl3_compute_scale (current_window);
@@ -1425,6 +1474,17 @@ static int ekbhit_sdl3dummy(void)
 				break;
 			}
 
+#ifdef __APPLE__
+			case SDL_EVENT_WINDOW_MOVED:
+			{
+				if (current_window && (SDL_GetWindowID(current_window) == event.window.windowID))
+				{
+					sdl3_remember_position ();
+				}
+				break;
+			}
+#endif
+
 			case SDL_EVENT_WINDOW_RESIZED:
 			{
 #ifdef SDL3_DEBUG
@@ -1774,6 +1834,10 @@ int sdl3_init(void)
 	}
 
 	sdl3_close_window ();
+#ifdef __APPLE__
+	sdl3_win_pos_known = 0; /* that was the detection window */
+	SDL_SetEventEnabled (SDL_EVENT_WINDOW_MOVED, true);
+#endif
 
 	SDL_SetEventEnabled (SDL_EVENT_TERMINATING, true);
 	SDL_SetEventEnabled (SDL_EVENT_WINDOW_CLOSE_REQUESTED, true);
@@ -1824,6 +1888,17 @@ void sdl3_done(void)
 	pollClose (pollTypeVideo);
 
 	sdl3_close_window ();
+
+#ifdef __APPLE__
+	if (sdl3_win_pos_known)
+	{
+		char buf[32];
+		snprintf (buf, sizeof (buf), "%d,%d", sdl3_win_x, sdl3_win_y);
+		cfSetProfileString (cfScreenSec, "sdlwindowpos", buf);
+		cfStoreConfig ();
+		sdl3_win_pos_known = 0;
+	}
+#endif
 
 	if (!need_quit)
 		return;

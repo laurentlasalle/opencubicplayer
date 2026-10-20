@@ -23,6 +23,8 @@ Settings and files
   used another version of OCP before, delete or rename this file to get the
   Omni defaults (128x48 window, tracker view settings...).
 - The file selector starts in your home folder.
+- The window opens where it was when OCP was last closed (centered the first
+  time).
 - HiDPI (Retina) screens are drawn at full resolution. [screen] sdlscale= in
   ocp.ini forces the number of screen pixels per OCP pixel (0 = automatic).
 
@@ -31,6 +33,9 @@ Keyboard
 - Function keys: hold fn (or enable "Use F1, F2, etc. keys as standard function
   keys" in System Settings > Keyboard).
 - Alt shortcuts use the Option key.
+- Ctrl+Left/Right (previous/next track in files with several songs) are taken by
+  macOS to switch desktops: use < and > instead, or turn off "Move left/right a
+  space" in System Settings > Keyboard > Keyboard Shortcuts > Mission Control.
 - F1 = help, Alt-K = list of the keys available on the current screen.
 
 Command line
