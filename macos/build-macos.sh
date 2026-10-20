@@ -58,6 +58,8 @@ if ! test -f $PREFIX/.gme-$GME_REF; then
 	touch $PREFIX/.gme-$GME_REF
 fi
 
+nm -gU $PREFIX/lib/libgme.dylib | grep -q _gme_vis_enable || { echo "libgme in $PREFIX lacks the visualisation API"; exit 1; }
+
 step "libvgm (static, linked into the S98 plugin)"
 if ! test -f $PREFIX/.libvgm-$LIBVGM_REF; then
 	rm -rf $BUILD/libvgm
@@ -86,6 +88,7 @@ make distclean > /dev/null 2>&1 || true
 	CPPFLAGS="-I$PREFIX/include -I$BREW/include" \
 	LDFLAGS="-L$PREFIX/lib -L$BREW/lib -Wl,-headerpad_max_install_names" \
 	LIBDIROCP="$STAGE" DATADIROCP="$STAGE" \
+	LIBGME_CFLAGS="-I$PREFIX/include" LIBGME_LIBS="$PREFIX/lib/libgme.dylib" \
 	--prefix="$STAGE" --bindir="$STAGE" --libdir="$STAGE" --datadir="$STAGE" --datarootdir="$STAGE" \
 	--sysconfdir="$STAGE" --docdir="$STAGE/doc" --mandir="$STAGE/man" \
 	--without-x11 --without-info --without-update-mime-database --without-desktop_file_install \
