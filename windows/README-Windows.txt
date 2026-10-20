@@ -155,9 +155,11 @@ Omni v8 (3.5.0-omni.8)
  - Tracker view also for SPC (SNES), VGM / GYM (Genesis, Master System) and
    S98 (PC-88/PC-98); shorter cells when there are many channels
  - The volume set with - / + or F2 / F3 is kept for the next files
- - Start directory of the file browser set in ALT-C (item F, saved with
-   ALT-S to [fileselector] path=); TAB completes folder names there and in
-   the path editor (ALT-Enter)
+ - The file browser starts in your Music folder (the one Windows Explorer
+   shows, even if moved to OneDrive or another drive); another start folder
+   can be set in ALT-C (item F, saved with ALT-S to [fileselector] path=,
+   "." = where OCP is started). TAB completes folder names there and in the
+   path editor (ALT-Enter)
  - macOS build (Apple Silicon application bundle)
 Omni v7 (3.5.0-omni.7, 2026-10-19)
  - Versions named <upstream version>-omni.<release>; OCP itself reports the

@@ -46,6 +46,6 @@ ifeq ($(STATIC_CORE),1)
  STATIC_OBJECTS += $(patsubst %.o,filesel/%.o,$(pfilesel_so))
  STATIC_LIBS += -lz -lbz2 $(MATH_LIBS) $(PTHREAD_LIBS) $(LIBDISCID_LIBS) $(ICONV_LIBS) $(LIBCJSON_LIBS) $(LIBANCIENT_LIBS)
  ifeq ($(WINDOWS),1)
-  STATIC_LIBS += -lshlwapi # due to PathMatchSpec()
+  STATIC_LIBS += -lshlwapi -lshell32 -lole32 # PathMatchSpec(), SHGetKnownFolderPath(), CoTaskMemFree()
  endif
 endif

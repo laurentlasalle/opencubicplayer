@@ -59,6 +59,7 @@
 # include <shlwapi.h>
 # include <wchar.h>
 # include <windows.h>
+# include <shlobj.h>
 #else
 #include <dirent.h>
 #include <fnmatch.h>
@@ -120,8 +121,62 @@ static char *curmask;
 
 struct dmDrive *dmCurDrive=0;
 
-/* the start directory ([fileselector] path=, "." = where OCP is started) */
+/* the start directory ([fileselector] path=; empty = the user's Music folder, "." = where
+ * OCP is started) */
 static char *fsStartPath;
+
+/* the user's Music folder as the system knows it (Windows follows relocations, e.g. to
+ * OneDrive or another drive), else the home folder; malloc()ed, with a trailing separator */
+static char *fsMusicFolder (void)
+{
+	char *r = 0;
+#ifdef _WIN32
+	/* FOLDERID_Music, defined here to avoid linking with libuuid */
+	static const GUID music = {0x4BD8D571, 0x6D19, 0x48D3, {0xBE, 0x97, 0x42, 0x22, 0x20, 0x08, 0x0E, 0x43}};
+	PWSTR w = 0;
+	if (SUCCEEDED (SHGetKnownFolderPath (&music, 0, 0, &w)) && w)
+	{
+		char *u = utf16_to_utf8 ((uint16_t *)w);
+		if (u)
+		{
+			r = malloc (strlen (u) + 2);
+			if (r)
+			{
+				sprintf (r, "%s\\", u);
+			}
+			free (u);
+		}
+	}
+	if (w)
+	{
+		CoTaskMemFree (w);
+	}
+	if (!r && getenv ("USERPROFILE"))
+	{
+		r = malloc (strlen (getenv ("USERPROFILE")) + 2);
+		if (r)
+		{
+			sprintf (r, "%s\\", getenv ("USERPROFILE"));
+		}
+	}
+#else
+	const char *home = getenv ("HOME");
+	struct stat st;
+	if (home && *home)
+	{
+		r = malloc (strlen (home) + 8);
+		if (r)
+		{
+			sprintf (r, "%s/Music/", home);
+			if (stat (r, &st) || !S_ISDIR (st.st_mode))
+			{
+				sprintf (r, "%s/", home);
+			}
+		}
+	}
+#endif
+	return r;
+}
 
 static int fsSavePlayList(const struct modlist *ml);
 
@@ -762,6 +817,7 @@ static int initRootDir(const struct configAPI_t *configAPI, const char *sec)
 {
 	int count;
 	const char *currentpath2 = 0;
+	char *musicfolder = 0;
 
 	/* check for files from the command-line */
 	{
@@ -865,9 +921,14 @@ static int initRootDir(const struct configAPI_t *configAPI, const char *sec)
 	}
 
 	/* change dir, if a path= is given in [fileselector], we default to . */
-	currentpath2 = configAPI->GetProfileString2(sec, "fileselector", "path", ".");
+	currentpath2 = configAPI->GetProfileString2(sec, "fileselector", "path", "");
 	free (fsStartPath);
 	fsStartPath = strdup (currentpath2);
+	musicfolder = currentpath2[0] ? 0 : fsMusicFolder ();
+	if (musicfolder)
+	{
+		currentpath2 = musicfolder;
+	}
 	if (strlen (currentpath2) && strcmp (currentpath2, "."))
 	{
 		uint32_t newcurrentpath = DIRDB_CLEAR;
@@ -903,6 +964,7 @@ static int initRootDir(const struct configAPI_t *configAPI, const char *sec)
 			dirdbUnref (newcurrentpath, dirdb_use_pfilesel);
 		}
 	}
+	free (musicfolder);
 
 	return 1;
 }
@@ -3154,7 +3216,7 @@ superbreak:
 		display_nprintf (12, 0, 0x07, plScrWidth, "C:  put archives: %.15o%s",                             fsPutArcs?"on":"off");
 		display_nprintf (13, 0, 0x07, plScrWidth, "D:  show all files: %.15o%s",                           fsShowAllFiles?"on":"off");
 		display_nprintf (14, 0, 0x07, plScrWidth, "E:  file-extensions to scan");
-		display_nprintf (15, 0, 0x07, plScrWidth, "F:  start directory: %.15o%s", (fsStartPath && strcmp (fsStartPath, ".")) ? fsStartPath : "(where OCP is started)");
+		display_nprintf (15, 0, 0x07, plScrWidth, "F:  start directory: %.15o%s", (!fsStartPath || !fsStartPath[0]) ? "(Music folder)" : strcmp (fsStartPath, ".") ? fsStartPath : "(where OCP is started)");
 		display_nprintf (16, 0, 0x07, plScrWidth, "+-: target framerate:%.15o%-4d%.7o, actual framerate: %.15o%d", fsFPS, LastCurrent=fsFPSCurrent);
 
 		displayvoid (17, 0, plScrWidth);
@@ -3209,18 +3271,18 @@ superbreak:
 			case 'e': case 'E': fsEditRegisterExt(); break;
 			case 'f': case 'F':
 			{ /* type the folder (TAB completes), prefilled with the folder open in the browser;
-			     an empty field means "where OCP is started" */
+			     an empty field means the Music folder, "." where OCP is started */
 				char *edit = fsNativeCurrentDir ();
 				int r;
 				if (!edit)
 				{
-					edit = strdup ((fsStartPath && strcmp (fsStartPath, ".")) ? fsStartPath : "");
+					edit = strdup (fsStartPath ? fsStartPath : "");
 				}
 				if (!edit)
 				{
 					break;
 				}
-				displaystr (plScrHeight-1, 0, 0x17, "  type the folder, TAB completes the name, empty = where OCP is started, ENTER to accept, ESC to cancel", plScrWidth);
+				displaystr (plScrHeight-1, 0, 0x17, "  type the folder, TAB completes the name, empty = Music folder, . = where OCP is started, ENTER accepts, ESC cancels", plScrWidth);
 				displayvoid (15, 0, plScrWidth);
 				displaystr (15, 0, 0x07, "F:  start directory:", 21);
 				EditStringSetCompletion (fsCompletePath);
@@ -3231,7 +3293,7 @@ superbreak:
 				if (!r)
 				{
 					free (fsStartPath);
-					fsStartPath = strdup (edit[0] ? edit : ".");
+					fsStartPath = strdup (edit);
 					stored = 0;
 				}
 				free (edit);
@@ -3257,7 +3319,7 @@ superbreak:
 				/*cfSetProfileInt(sec, "", fsInfoMode);*/
 				cfSetProfileBool(sec, "putarchives", fsPutArcs);
 				cfSetProfileBool(sec, "showallfiles", fsShowAllFiles);
-				cfSetProfileString(sec, "path", fsStartPath ? fsStartPath : ".");
+				cfSetProfileString(sec, "path", fsStartPath ? fsStartPath : "");
 				cfSetProfileInt("screen", "fps", fsFPS, 10);
 				cfStoreConfig();
 				stored = 1;
