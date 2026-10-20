@@ -43,7 +43,6 @@ static int  cacheHas;
 
 static long lastPos = -1;
 
-static char patname[256];
 
 static int trak_getcurpos (struct cpifaceSessionAPI_t *cpifaceSession)
 {
@@ -97,16 +96,18 @@ static const char *short_name (const char *n, char *buf)
 
 static const char *trak_getpatname (struct cpifaceSessionAPI_t *cpifaceSession, int n)
 {
+	return 0; /* channel names are shown in the column header, see trak_getchanname() */
+}
+
+static const char *trak_getchanname (struct cpifaceSessionAPI_t *cpifaceSession, int ch)
+{
 	const struct nsfvis_layout_t *l = gmeVisLayout ();
-	int i;
-	size_t o = 0;
-	patname[0] = 0;
-	for (i = 0; i < l->count && o < sizeof (patname) - 16; i++)
+	static char buf[8];
+	if (ch < 0 || ch >= l->count)
 	{
-		char buf[8];
-		o += snprintf (patname + o, sizeof (patname) - o, "%s%d:%s", i ? " " : "", i + 1, short_name (l->name[i], buf));
+		return 0;
 	}
-	return patname;
+	return short_name (l->name[ch], buf);
 }
 
 static void trak_seektrack (struct cpifaceSessionAPI_t *cpifaceSession, int n, int c)
@@ -301,5 +302,6 @@ OCP_INTERNAL const struct cpitrakdisplaystruct gmeTrakDisplay =
 	trak_getvol,
 	trak_getpan,
 	trak_getfx,
-	trak_getgcmd
+	trak_getgcmd,
+	trak_getchanname
 };

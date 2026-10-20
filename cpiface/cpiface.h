@@ -185,6 +185,7 @@ struct cpitrakdisplaystruct
 	int         (*getpan)     (struct cpifaceSessionAPI_t *cpifaceSession, uint16_t *bp);
 	void        (*getfx)      (struct cpifaceSessionAPI_t *cpifaceSession, uint16_t *bp, int n);
 	void        (*getgcmd)    (struct cpifaceSessionAPI_t *cpifaceSession, uint16_t *bp, int n);
+	const char *(*getchanname)(struct cpifaceSessionAPI_t *cpifaceSession, int ch); /* optional (may be NULL): short channel name, shown in the header of the stretched layout */
 };
 
 extern void cpiTrkSetup  (struct cpifaceSessionAPI_t *cpifaceSession, const struct cpitrakdisplaystruct *c, int npat);

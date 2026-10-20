@@ -75,6 +75,7 @@ static int         (*getvol)    (struct cpifaceSessionAPI_t *cpifaceSession, uin
 static int         (*getpan)    (struct cpifaceSessionAPI_t *cpifaceSession, uint16_t *bp);
 static void        (*getfx)     (struct cpifaceSessionAPI_t *cpifaceSession, uint16_t *bp, int n);
 static void        (*getgcmd)   (struct cpifaceSessionAPI_t *cpifaceSession, uint16_t *bp, int n);
+static const char *(*getchanname)(struct cpifaceSessionAPI_t *cpifaceSession, int ch);
 
 static int plPatternNum;
 static int plPrepdPat;
@@ -591,6 +592,10 @@ static void preparepatstretch (struct cpifaceSessionAPI_t *cpifaceSession, int p
 
 	pname = getpatname (cpifaceSession, pat);
 	snprintf (pattitle1, sizeof (pattitle1), "   pattern view:  order %03X, %2d channels,  %s%s%s", pat, chnn, (cellw == 11) ? "(note, ins, vol, slide)" : "(note, ins, vol)", (pname&&*pname)?": ":"", (pname&&*pname)?pname:"");
+	if ((int)strlen (pattitle1) > plPatWidth)
+	{ /* keep the title on one line */
+		snprintf (pattitle1, sizeof (pattitle1), "   pattern view:  order %03X, %2d channels", pat, chnn);
+	}
 
 	patwidth = p0 + colw * chnn + 4; /* separator, blank (marker), row number, blank */
 	patpad = (plPatWidth - patwidth) >= 0;
@@ -608,7 +613,27 @@ static void preparepatstretch (struct cpifaceSessionAPI_t *cpifaceSession, int p
 	{
 		uint8_t chpaus = cpifaceSession->MuteChannel[i];
 		uint8_t sel = (i==cpifaceSession->SelectedChannel);
-		writenum(pattitle2, p0 + colw * i + off + cellw / 2 - 1, sel?COLTITLE2H:chpaus?COLTITLE2M:COLLNUM, i+1, 10, 2, 1);
+		{
+			/* "1 Name", or "Name", or "1" - centred over the column (separator excluded) */
+			char label[32];
+			const char *name = getchanname ? getchanname (cpifaceSession, i) : 0;
+			int avail = colw - 1, l;
+			snprintf (label, sizeof (label), "%d %s", i + 1, name ? name : "");
+			if (!name || !*name)
+			{
+				snprintf (label, sizeof (label), "%d", i + 1);
+			} else if ((int)strlen (label) > avail)
+			{
+				snprintf (label, sizeof (label), "%s", name);
+				if ((int)strlen (label) > avail)
+				{
+					snprintf (label, sizeof (label), "%d", i + 1);
+				}
+			}
+			l = strlen (label);
+			if (l > avail) l = avail;
+			writestring(pattitle2, p0 + colw * i + (avail - l) / 2, sel?COLTITLE2H:chpaus?COLTITLE2M:COLLNUM, label, l);
+		}
 		writestring(patmask, p0 + colw * i, COLBACK, "", colw - 1);
 		writestring(patmask, p0 + colw * i + colw - 1, COLBACK, (i == (chnn - 1)) ? "\xba" : "\xb3", 1);
 	}
@@ -1022,6 +1047,7 @@ void cpiTrkSetup (struct cpifaceSessionAPI_t *cpifaceSession, const struct cpitr
 	getpan           = c->getpan;
 	getfx            = c->getfx;
 	getgcmd          = c->getgcmd;
+	getchanname      = c->getchanname;
 	cpiTextRegisterMode (cpifaceSession, &cpiTModeTrack);
 }
 
@@ -1050,6 +1076,7 @@ void cpiTrkSetup2 (struct cpifaceSessionAPI_t *cpifaceSession, const struct cpit
 	getpan           = c->getpan;
 	getfx            = c->getfx;
 	getgcmd          = c->getgcmd;
+	getchanname      = c->getchanname;
 	cpiTextRegisterMode (cpifaceSession, &cpiTModeTrack);
 }
 
