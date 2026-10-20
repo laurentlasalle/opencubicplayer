@@ -31,6 +31,7 @@ gmeplay.o: gmeplay.c \
 	../dev/ringbuffer.h \
 	../filesel/filesystem.h \
 	../playgme/gmeplay.h \
+	../playgme/nsfvis.h \
 	../stuff/err.h \
 	../stuff/imsrtns.h
 	$(CC) $(LIBGME_CFLAGS) $< -o $@ -c
@@ -45,6 +46,7 @@ gmepplay.o: gmepplay.c \
 	../filesel/filesystem.h \
 	../filesel/mdb.h \
 	../filesel/pfilesel.h \
+	../playgme/gmeconfig.h \
 	../playgme/gmeplay.h \
 	../playgme/gmetype.h \
 	../stuff/compat.h \
@@ -65,6 +67,35 @@ gmetype.o: gmetype.c \
 	../stuff/err.h
 	$(CC) $< -o $@ -c
 
-playgme_so=cpiinfo.o gmetype.o gmeplay.o gmepplay.o
+gmeconfig.o: gmeconfig.c \
+	../config.h \
+	../types.h \
+	../boot/plinkman.h \
+	../boot/psetting.h \
+	../filesel/filesystem.h \
+	../filesel/filesystem-file-dev.h \
+	../filesel/filesystem-setup.h \
+	../filesel/pfilesel.h \
+	../playgme/gmeconfig.h \
+	../stuff/compat.h \
+	../stuff/err.h \
+	../stuff/poutput.h
+	$(CC) $< -o $@ -c
+
+nsfvis.o: nsfvis.c \
+	../config.h \
+	../playgme/nsfvis.h
+	$(CC) $(LIBGME_CFLAGS) $< -o $@ -c
+
+nsftrak.o: nsftrak.c \
+	../config.h \
+	../types.h \
+	../cpiface/cpiface.h \
+	../playgme/gmeplay.h \
+	../playgme/nsfvis.h \
+	../stuff/poutput.h
+	$(CC) $< -o $@ -c
+
+playgme_so=cpiinfo.o gmeconfig.o gmetype.o gmeplay.o gmepplay.o nsfvis.o nsftrak.o
 playgme$(LIB_SUFFIX): $(playgme_so)
 	$(CC) $(SHARED_FLAGS) -o $@ $^ $(LIBGME_LIBS) -lz

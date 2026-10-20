@@ -25,6 +25,7 @@
 #include "types.h"
 #include "gmeplay.h"
 #include "gmetype.h"
+#include "gmeconfig.h"
 #include "boot/plinkman.h"
 #include "cpiface/cpiface.h"
 #include "dev/player.h"
@@ -151,6 +152,14 @@ static int gmeOpenFile (struct cpifaceSessionAPI_t *cpifaceSession, struct modul
 
 	gmeInfoInit (cpifaceSession);
 
+	cpifaceSession->LogicalChannelCount = gmeChannelCount ();
+	cpifaceSession->SetMuteChannel = gmeSetMute;
+	if (gmeVisActive ())
+	{
+		cpifaceSession->TrackSetup2 (cpifaceSession, &gmeTrakDisplay, GME_TRAK_PATTERNS, gmeChannelCount ());
+		cpifaceSession->TrackStretch (cpifaceSession, 1);
+	}
+
 	cpifaceSession->InPause = 0;
 
 	gme_file = file;
@@ -161,11 +170,17 @@ static int gmeOpenFile (struct cpifaceSessionAPI_t *cpifaceSession, struct modul
 
 static int gmePluginInit (struct PluginInitAPI_t *API)
 {
-	return gme_type_init (API);
+	int retval = gme_type_init (API);
+	if (retval)
+	{
+		return retval;
+	}
+	return gme_config_init (API);
 }
 
 static void gmePluginClose (struct PluginCloseAPI_t *API)
 {
+	gme_config_done (API);
 	gme_type_done (API);
 }
 

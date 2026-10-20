@@ -37,6 +37,7 @@
 
 #include "boot/psetting.h"
 #include "gmeplay.h"
+#include "nsfvis.h"
 
 static Music_Emu *gmesession;
 
@@ -60,6 +61,182 @@ static struct gme_info_t *gmetrackinfo;
 static int gme_cfg_loops = 2;          /* loops=       times the loop section is played, when the file gives intro/loop lengths (VGM, ...) */
 static int gme_cfg_defaultlength = 150; /* defaultlength= seconds, when the file gives no length (plain NSF, GBS, KSS, ...); 0 = forever */
 static int gme_cfg_fade = 8;            /* fade=        seconds of fade-out, unless the file specifies one */
+
+/* NSF tracker view: chip state per frame, synchronized with what is heard */
+#define VIS_RING 16384                     /* frames kept (about 4.5 minutes) */
+#define VIS_SLOTS 512
+static int vis_enabled;                    /* collecting frames for this file */
+static int vis_layout_done;
+static struct nsfvis_layout_t vis_layout;
+static struct nsfvis_ch_t *vis_ring;       /* [VIS_RING][vis_layout.count] */
+static long vis_sample[VIS_RING];          /* output sample frame where each frame starts */
+static long vis_first;                     /* absolute index of the oldest kept frame */
+static long vis_count;                     /* number of kept frames */
+static long vis_outpos;                    /* sample frames returned by gme_play() since the track started */
+static volatile long vis_playpos;          /* sample frame currently heard */
+static volatile int vis_generation;        /* incremented when a track (re)starts, stale callbacks are ignored */
+static int vis_newdata;
+static unsigned int vis_chips_header;      /* expansion chips from the file header, fallback for the layout */
+static int vis_rowframes = 6;
+static const struct plrDevAPI_t *vis_plrDevAPI;
+
+static struct vis_slot_t
+{
+	long pos;
+	int generation;
+	int busy;
+} vis_slots[VIS_SLOTS];
+static int vis_slot_next;
+
+static void vis_track_reset (void)
+{
+	vis_generation++;
+	vis_first = 0;
+	vis_count = 0;
+	vis_outpos = 0;
+	vis_playpos = 0;
+	vis_generation++;
+}
+
+static void vis_pull (void)
+{
+	gme_nsf_frame_t tmp[64];
+	int n, i;
+
+	if (!vis_enabled || !gmesession)
+	{
+		return;
+	}
+	while ((n = gme_vis_read (gmesession, tmp, 64)) > 0)
+	{
+		for (i = 0; i < n; i++)
+		{
+			long idx;
+			if (!vis_layout_done)
+			{
+				if (!tmp[i].system && !tmp[i].chips) tmp[i].chips = vis_chips_header;
+				nsfvis_layout (&vis_layout, &tmp[i]);
+				vis_ring = calloc ((size_t)VIS_RING * vis_layout.count, sizeof (struct nsfvis_ch_t));
+				if (!vis_ring)
+				{
+					vis_enabled = 0;
+					return;
+				}
+				vis_layout_done = 1;
+			}
+			/* frames emulated while libgme skipped the initial silence are stamped too late:
+			 * drop them when the timeline goes backwards (they are silent anyway) */
+			while (vis_count && (vis_sample[(vis_first + vis_count - 1) % VIS_RING] >= tmp[i].sample))
+			{
+				vis_count--;
+			}
+			if (vis_count == VIS_RING)
+			{
+				vis_first++;
+				vis_count--;
+			}
+			idx = (vis_first + vis_count) % VIS_RING;
+			nsfvis_decode (&vis_layout, &tmp[i], vis_ring + idx * vis_layout.count);
+			vis_sample[idx] = tmp[i].sample;
+			vis_count++;
+			vis_newdata = 1;
+		}
+	}
+}
+
+static void vis_callback_from_devp (void *arg, int samples_ago)
+{
+	struct vis_slot_t *slot = arg;
+	if (slot->generation == vis_generation)
+	{
+		vis_playpos = slot->pos;
+	}
+	slot->busy = 0;
+}
+
+static unsigned int vis_commit_target; /* device samples that will be committed by the ongoing tail_consume_samples() */
+
+/* fired while the chunk holding the tagged sample is consumed; it is committed to the device right after */
+static void vis_callback_from_ringbuffer (void *arg, int samples_ago)
+{
+	struct vis_slot_t *slot = arg;
+	int samples_until = (int)vis_commit_target - (gmebufrate ? (int)((int64_t)samples_ago * 65536 / gmebufrate) : samples_ago);
+	if (samples_until < 0)
+	{
+		samples_until = 0;
+	}
+	if (vis_plrDevAPI && vis_plrDevAPI->OnBufferCallback)
+	{
+		vis_plrDevAPI->OnBufferCallback (-samples_until, vis_callback_from_devp, slot);
+	} else {
+		vis_callback_from_devp (arg, 0);
+	}
+}
+
+OCP_INTERNAL int gmeVisActive (void)
+{
+	return vis_enabled && vis_layout_done;
+}
+
+OCP_INTERNAL const struct nsfvis_layout_t *gmeVisLayout (void)
+{
+	return &vis_layout;
+}
+
+OCP_INTERNAL int gmeVisRowFrames (void)
+{
+	return vis_rowframes;
+}
+
+OCP_INTERNAL int gmeVisTakeNewData (void)
+{
+	int r = vis_newdata;
+	vis_newdata = 0;
+	return r;
+}
+
+/* absolute index of the frame currently heard, -1 if none */
+OCP_INTERNAL long gmeVisCurrentFrame (void)
+{
+	long lo = vis_first, hi = vis_first + vis_count - 1, best = -1;
+	long pos = vis_playpos;
+	while (lo <= hi)
+	{
+		long mid = lo + (hi - lo) / 2;
+		if (vis_sample[mid % VIS_RING] <= pos)
+		{
+			best = mid;
+			lo = mid + 1;
+		} else {
+			hi = mid - 1;
+		}
+	}
+	return best;
+}
+
+OCP_INTERNAL long gmeVisFrameSample (long frame)
+{
+	if (frame < vis_first || frame >= vis_first + vis_count)
+	{
+		return -1;
+	}
+	return vis_sample[frame % VIS_RING];
+}
+
+OCP_INTERNAL long gmeVisLastFrame (void)
+{
+	return vis_first + vis_count - 1;
+}
+
+/* returns the decoded channels of an absolute frame index, or NULL if not kept */
+OCP_INTERNAL const struct nsfvis_ch_t *gmeVisFrame (long frame)
+{
+	if (!vis_ring || frame < vis_first || frame >= vis_first + vis_count)
+	{
+		return 0;
+	}
+	return vis_ring + (frame % VIS_RING) * vis_layout.count;
+}
 
 static void gmeApplyLength (void)
 {
@@ -97,6 +274,7 @@ static const char *gmeStartTrackInternal (int track)
 {
 	const char *result;
 
+	vis_track_reset ();
 	if ((result = gme_start_track (gmesession, gmeactivetrack = track)))
 	{
 		return result;
@@ -181,6 +359,21 @@ static void gmeIdler (struct cpifaceSessionAPI_t *cpifaceSession)
 		}
 
 		cpifaceSession->ringbufferAPI->head_add_samples (gmebufpos, length1);
+		vis_outpos += length1;
+		if (vis_enabled)
+		{
+			struct vis_slot_t *slot = &vis_slots[vis_slot_next];
+			vis_pull ();
+			/* never wait on a busy slot: a callback lost in a freed ringbuffer would freeze the view for good.
+			 * If an old callback for this slot still fires, the generation check below ignores it. */
+			{
+				vis_slot_next = (vis_slot_next + 1) % VIS_SLOTS;
+				slot->busy = 1;
+				slot->pos = vis_outpos;
+				slot->generation = vis_generation;
+				cpifaceSession->ringbufferAPI->add_tail_callback_samples (gmebufpos, 1, vis_callback_from_ringbuffer, slot);
+			}
+		}
 		cpifaceSession->ringbufferAPI->get_head_samples (gmebufpos, &pos1, &length1, &pos2, &length2);
 	}
 }
@@ -358,6 +551,7 @@ OCP_INTERNAL void gmeIdle (struct cpifaceSessionAPI_t *cpifaceSession)
 					pos2 = 0;
 				} /* while (targetlength && length1) */
 			} /* if (gmebufrate==0x10000) */
+			vis_commit_target = accumulated_target;
 			cpifaceSession->ringbufferAPI->tail_consume_samples (gmebufpos, accumulated_source);
 			cpifaceSession->plrDevAPI->CommitBuffer (accumulated_target);
 		} /* if (targetlength) */
@@ -495,6 +689,27 @@ OCP_INTERNAL int gmeOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 		free (data);
 		return errPlay;
 	}
+	vis_chips_header = 0;
+	if ((datalen > 0x80) && !memcmp (data, "NESM\x1a", 5))
+	{
+		vis_chips_header = data[0x7b];
+	} else if ((datalen > 12) && !memcmp (data, "NSFE", 4))
+	{
+		uint64_t o = 4;
+		while (o + 8 <= datalen)
+		{
+			uint32_t len = data[o] | (data[o+1] << 8) | (data[o+2] << 16) | ((uint32_t)data[o+3] << 24);
+			if (!memcmp (data + o + 4, "INFO", 4))
+			{
+				if ((len >= 8) && (o + 8 + 8 <= datalen))
+				{
+					vis_chips_header = data[o + 8 + 7];
+				}
+				break;
+			}
+			o += 8 + (uint64_t)len;
+		}
+	}
 	if ((result = gme_open_data (data, datalen, &gmesession, gmeRate)))
 	{
 		cpifaceSession->cpiDebug (cpifaceSession, "[GME]: %s\n", result);
@@ -515,13 +730,46 @@ OCP_INTERNAL int gmeOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 	if (gme_cfg_fade < 0) gme_cfg_fade = 0;
 	if (gme_cfg_fade > 60) gme_cfg_fade = 60;
 
+	vis_rowframes = cpifaceSession->configAPI->GetProfileInt ("gme", "rowframes", 6, 10);
+	if (vis_rowframes < 1) vis_rowframes = 1;
+	if (vis_rowframes > 32) vis_rowframes = 32;
+	vis_enabled = 0;
+	vis_layout_done = 0;
+	vis_plrDevAPI = cpifaceSession->plrDevAPI;
+	vis_generation++;
+	memset (vis_slots, 0, sizeof (vis_slots));
+	vis_slot_next = 0;
+	if (cpifaceSession->configAPI->GetProfileBool ("gme", "trackerview", 1, 1))
+	{
+		vis_enabled = gme_vis_enable (gmesession, 1);
+	}
+
 	if ((result = gmeStartTrackInternal (0)))
 	{
+		vis_enabled = 0;
 		cpifaceSession->cpiDebug (cpifaceSession, "[GME]: %s\n", result);
 		cpifaceSession->plrDevAPI->Stop (cpifaceSession);
 		gme_delete (gmesession);
 		gmesession = 0;
 		return errFormMiss;
+	}
+
+	if (vis_enabled)
+	{
+		vis_pull ();
+		if (!vis_layout_done)
+		{
+			gme_nsf_frame_t empty;
+			memset (&empty, 0, sizeof (empty));
+			empty.chips = vis_chips_header;
+			empty.n163[0x7F] = 0x70; /* unknown: 8 channels */
+			if (gme_type (gmesession) == gme_hes_type) empty.system = 1;
+			if (gme_type (gmesession) == gme_gbs_type) empty.system = 2;
+			nsfvis_layout (&vis_layout, &empty);
+			vis_ring = calloc ((size_t)VIS_RING * vis_layout.count, sizeof (struct nsfvis_ch_t));
+			vis_layout_done = vis_ring != 0;
+			vis_enabled = vis_layout_done;
+		}
 	}
 
 	gmelooped = 0;
@@ -571,6 +819,13 @@ void gmeClosePlayer (struct cpifaceSessionAPI_t *cpifaceSession)
 		gmetrackinfo = 0;
 	}
 
+	vis_enabled = 0;
+	vis_layout_done = 0;
+	vis_generation++;
+	free (vis_ring);
+	vis_ring = 0;
+	vis_count = 0;
+
 	if (gmesession)
 	{
 		gme_delete (gmesession);
@@ -585,6 +840,39 @@ void gmeClosePlayer (struct cpifaceSessionAPI_t *cpifaceSession)
 
 	free(gmebuf);
 	gmebuf = 0;
+}
+
+OCP_INTERNAL int gmeChannelCount (void)
+{
+	int n;
+	if (!gmesession)
+	{
+		return 0;
+	}
+	if (gmeVisActive ())
+	{
+		return vis_layout.count;
+	}
+	n = gme_voice_count (gmesession);
+	return (n > 64) ? 64 : n;
+}
+
+OCP_INTERNAL void gmeSetMute (struct cpifaceSessionAPI_t *cpifaceSession, int ch, int mute)
+{
+	int voice = ch;
+	cpifaceSession->MuteChannel[ch] = mute;
+	if (!gmesession)
+	{
+		return;
+	}
+	if (gmeVisActive ())
+	{
+		voice = (ch < vis_layout.count) ? vis_layout.voice[ch] : -1;
+	}
+	if (voice >= 0 && voice < gme_voice_count (gmesession))
+	{
+		gme_mute_voice (gmesession, voice, mute);
+	}
 }
 
 OCP_INTERNAL void gmeSetLoop (int s)
