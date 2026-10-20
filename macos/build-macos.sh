@@ -99,6 +99,7 @@ make install > $BUILD/ocp-install.log 2>&1 || { tail -30 $BUILD/ocp-install.log;
 step "Application bundle"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks"
 ditto "$STAGE" "$RES"
+rm -rf "$STAGE"   # so that the launch test below cannot fall back on the compiled-in paths
 mv "$RES/ocp" "$APP/Contents/MacOS/ocp"
 rm -rf "$RES"/ocp-* "$RES/icons" "$RES/mime" "$RES/applications" "$RES/man" "$RES/info"
 
@@ -186,7 +187,6 @@ PY
 LEFT=$(find "$APP" -type f \( -name "*.dylib" -o -perm -u+x \) -exec otool -L {} + 2>/dev/null | grep -E "^\s+(/opt/|/usr/local/|$WORK)" || true)
 if test -n "$LEFT"; then echo "references outside the bundle:"; echo "$LEFT"; exit 1; fi
 echo "plugins: $(ls "$RES/autoload" | wc -l | tr -d ' '), frameworks: $(ls "$APP/Contents/Frameworks" | wc -l | tr -d ' ')"
-"$APP/Contents/MacOS/ocp" --help 2>&1 | head -3 || true
 
 # every Mach-O file must carry a signature on Apple Silicon (install_name_tool broke them)
 find "$APP" -type f \( -name "*.dylib" -o -perm -u+x \) | while read -r f; do
@@ -194,6 +194,16 @@ find "$APP" -type f \( -name "*.dylib" -o -perm -u+x \) | while read -r f; do
 done
 codesign --force --sign - "$APP"
 codesign --verify --verbose "$APP" || true
+
+step Launch test
+# a fresh home, so that the default ocp.ini of the bundle is used
+TESTHOME=$WORK/testhome; rm -rf $TESTHOME; mkdir -p $TESTHOME
+OUT=$(cd / && HOME=$TESTHOME "$APP/Contents/MacOS/ocp" --help 2>&1) || true
+if echo "$OUT" | grep -q "command line help"; then
+	echo "launch test ok"
+else
+	echo "launch test failed:"; echo "$OUT" | tail -30; exit 1
+fi
 
 step Package
 PKG=ocp-$VERSION-macos-$ARCH

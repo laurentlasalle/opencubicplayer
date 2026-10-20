@@ -1030,9 +1030,7 @@ static char *locate_libocp(void)
 			return retval;
 */
 #ifdef __APPLE__
-	if (apple_resdir && (retval=locate_libocp_try(apple_resdir, 0)))
-		return retval;
-	if (apple_exedir && (retval=locate_libocp_try(apple_exedir, 0)))
+	if (apple_resdir && (retval=locate_libocp_try(apple_resdir, 1)))
 		return retval;
 #endif
 	if ((retval=locate_libocp_try(LIBDIROCP, 1)))
