@@ -36,7 +36,13 @@ jobs:
 
       - name: Logs on failure
         if: failure()
-        run: tail -n 80 .work/build/*.log || true
+        shell: bash
+        run: |
+          # also as annotations, readable without signing in
+          for f in "$RUNNER_TEMP/build.txt" $(ls -t .work/build/*.log 2>/dev/null | head -2); do
+            test -f "$f" || continue
+            echo "::error title=$(basename $f)::$(tail -n 40 "$f" | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+          done
 
       - uses: actions/upload-artifact@v4
         with:
