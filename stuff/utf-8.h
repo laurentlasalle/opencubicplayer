@@ -25,6 +25,12 @@ int EditStringUTF8z(unsigned int y, unsigned int x, unsigned int w, int l, char 
 /* zero-terminated, forever long dynamic buffer */
 int EditStringUTF8(unsigned int y, unsigned int x, unsigned int w, char **s);
 
+/* TAB completion for EditStringUTF8 / EditStringASCII (0 = none, the default).
+ * complete() receives the text left of the cursor and returns the number of candidates;
+ * *matches is a malloc()ed array of malloc()ed strings that replace that text. The first
+ * TAB completes the longest common part, the following ones cycle through the candidates. */
+void EditStringSetCompletion (int (*complete)(const char *typed, char ***matches));
+
 /* zero-terminated, forever long dynamic buffer */
 int EditStringASCII(unsigned int y, unsigned int x, unsigned int w, char **s);
 

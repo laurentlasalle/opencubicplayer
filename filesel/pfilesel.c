@@ -57,9 +57,13 @@
 #include <errno.h>
 #ifdef _WIN32
 # include <shlwapi.h>
+# include <wchar.h>
+# include <windows.h>
 #else
+#include <dirent.h>
 #include <fnmatch.h>
 #endif
+#include <strings.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -115,6 +119,9 @@ static struct modlist *playlist=NULL;
 static char *curmask;
 
 struct dmDrive *dmCurDrive=0;
+
+/* the start directory ([fileselector] path=, "." = where OCP is started) */
+static char *fsStartPath;
 
 static int fsSavePlayList(const struct modlist *ml);
 
@@ -859,6 +866,8 @@ static int initRootDir(const struct configAPI_t *configAPI, const char *sec)
 
 	/* change dir, if a path= is given in [fileselector], we default to . */
 	currentpath2 = configAPI->GetProfileString2(sec, "fileselector", "path", ".");
+	free (fsStartPath);
+	fsStartPath = strdup (currentpath2);
 	if (strlen (currentpath2) && strcmp (currentpath2, "."))
 	{
 		uint32_t newcurrentpath = DIRDB_CLEAR;
@@ -2936,6 +2945,177 @@ Repaint: ;
 	goto Repaint;
 }
 
+/* TAB completion of folder names for path entry fields (see EditStringSetCompletion) */
+static int fsCompareNoCase (const void *a, const void *b)
+{
+	return strcasecmp (*(char * const *)a, *(char * const *)b);
+}
+
+static int fsCompletePath (const char *typed, char ***matches)
+{
+	const char *prefix = typed; /* "file:" drive prefix shown by the path editor */
+	const char *last = 0, *p, *name;
+	char sep = '/';
+	char *dir;
+	int count = 0, size = 0;
+
+	*matches = 0;
+#ifndef _WIN32
+	if (!strncmp (typed, "file:", 5))
+	{
+		prefix = typed + 5;
+	}
+#endif
+	for (p = prefix; *p; p++)
+	{
+		if ((*p == '/')
+#ifdef _WIN32
+		    || (*p == '\\')
+#endif
+		   )
+		{
+			last = p;
+			sep = *p;
+		}
+	}
+#ifdef _WIN32
+	if (!last && prefix[0] && (prefix[1] == ':'))
+	{
+		last = prefix + 1; /* "C:abc" */
+		sep = '\\';
+	}
+#endif
+	name = last ? last + 1 : prefix;
+	dir = malloc (name - prefix + 3);
+	if (!dir)
+	{
+		return 0;
+	}
+	memcpy (dir, prefix, name - prefix);
+	dir[name - prefix] = 0;
+
+#define FS_ADD_MATCH(entry) \
+	do { \
+		char *m; \
+		if (count == size) \
+		{ \
+			char **t = realloc (*matches, sizeof (char *) * (size + 32)); \
+			if (!t) break; \
+			*matches = t; \
+			size += 32; \
+		} \
+		m = malloc ((name - typed) + strlen (entry) + 2); \
+		if (!m) break; \
+		memcpy (m, typed, name - typed); \
+		sprintf (m + (name - typed), "%s%c", entry, sep); \
+		(*matches)[count++] = m; \
+	} while (0)
+
+#ifdef _WIN32
+	{
+		WIN32_FIND_DATAW fd;
+		HANDLE h;
+		uint16_t *wdir, *wname;
+		size_t wl;
+		strcat (dir, "*");
+		wdir = utf8_to_utf16 (dir);
+		wname = utf8_to_utf16 (name);
+		if (wdir && wname && ((h = FindFirstFileW ((wchar_t *)wdir, &fd)) != INVALID_HANDLE_VALUE))
+		{
+			wl = wcslen ((wchar_t *)wname);
+			do
+			{
+				if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
+				    wcscmp (fd.cFileName, L".") && wcscmp (fd.cFileName, L"..") &&
+				    !_wcsnicmp (fd.cFileName, (wchar_t *)wname, wl))
+				{
+					char *u = utf16_to_utf8 ((uint16_t *)fd.cFileName);
+					if (u)
+					{
+						FS_ADD_MATCH(u);
+						free (u);
+					}
+				}
+			} while (FindNextFileW (h, &fd));
+			FindClose (h);
+		}
+		free (wdir);
+		free (wname);
+	}
+#else
+	{
+		DIR *d = opendir (dir[0] ? dir : ".");
+		struct dirent *de;
+		size_t nl = strlen (name);
+		if (d)
+		{
+			while ((de = readdir (d)))
+			{
+				struct stat st;
+				char *full;
+				if (!strcmp (de->d_name, ".") || !strcmp (de->d_name, ".."))
+				{
+					continue;
+				}
+				if ((de->d_name[0] == '.') && (name[0] != '.'))
+				{
+					continue; /* hidden */
+				}
+# ifdef __APPLE__
+				if (strncasecmp (de->d_name, name, nl))
+# else
+				if (strncmp (de->d_name, name, nl))
+# endif
+				{
+					continue;
+				}
+				full = malloc (strlen (dir) + strlen (de->d_name) + 2);
+				if (!full)
+				{
+					continue;
+				}
+				sprintf (full, "%s%s", dir[0] ? dir : "./", de->d_name);
+				if (!stat (full, &st) && S_ISDIR (st.st_mode))
+				{
+					FS_ADD_MATCH(de->d_name);
+				}
+				free (full);
+			}
+			closedir (d);
+		}
+	}
+#endif
+#undef FS_ADD_MATCH
+	free (dir);
+	if (count > 1)
+	{
+		qsort (*matches, count, sizeof (char *), fsCompareNoCase);
+	}
+	return count;
+}
+
+/* the directory shown in the file browser as a native path, or 0 if it is not a plain folder */
+static char *fsNativeCurrentDir (void)
+{
+	char *r = 0;
+	if (!dmCurDrive || !dmCurDrive->cwd)
+	{
+		return 0;
+	}
+#ifdef _WIN32
+	if (dmCurDrive->drivename[1] == ':')
+	{
+		dirdbGetFullname_malloc (dmCurDrive->cwd->dirdb_ref, &r, DIRDB_FULLNAME_ENDSLASH | DIRDB_FULLNAME_BACKSLASH);
+	}
+#else
+	if (dmCurDrive == dmFile)
+	{
+		dirdbGetFullname_malloc (dmCurDrive->cwd->dirdb_ref, &r, DIRDB_FULLNAME_NODRIVE | DIRDB_FULLNAME_ENDSLASH);
+	}
+#endif
+	return r;
+}
+
 void fsSetup(void)
 {
 	int stored = 0;
@@ -2974,16 +3154,17 @@ superbreak:
 		display_nprintf (12, 0, 0x07, plScrWidth, "C:  put archives: %.15o%s",                             fsPutArcs?"on":"off");
 		display_nprintf (13, 0, 0x07, plScrWidth, "D:  show all files: %.15o%s",                           fsShowAllFiles?"on":"off");
 		display_nprintf (14, 0, 0x07, plScrWidth, "E:  file-extensions to scan");
-		display_nprintf (15, 0, 0x07, plScrWidth, "+-: target framerate:%.15o%-4d%.7o, actual framerate: %.15o%d", fsFPS, LastCurrent=fsFPSCurrent);
+		display_nprintf (15, 0, 0x07, plScrWidth, "F:  start directory: %.15o%s", (fsStartPath && strcmp (fsStartPath, ".")) ? fsStartPath : "(where OCP is started)");
+		display_nprintf (16, 0, 0x07, plScrWidth, "+-: target framerate:%.15o%-4d%.7o, actual framerate: %.15o%d", fsFPS, LastCurrent=fsFPSCurrent);
 
-		displayvoid (16, 0, plScrWidth);
+		displayvoid (17, 0, plScrWidth);
 
-		displaystr(17, 0, 0x07, "ALT-S (or CTRL-S if in X) to save current setup to ocp.ini", plScrWidth);
+		displaystr(18, 0, 0x07, "ALT-S (or CTRL-S if in X) to save current setup to ocp.ini", plScrWidth);
 		displaystr(plScrHeight-1, 0, 0x17, "  press the number of the item you wish to change and ESC when done", plScrWidth);
 
-		displaystr(18, 0, 0x03, (stored?"ocp.ini saved":""), plScrWidth);
+		displaystr(19, 0, 0x03, (stored?"ocp.ini saved":""), plScrWidth);
 
-		for (i=19; i < plScrHeight; i++)
+		for (i=20; i < plScrHeight; i++)
 		{
 			displayvoid (i, 0, plScrWidth);
 		}
@@ -3026,6 +3207,36 @@ superbreak:
 			case 'c': case 'C': stored = 0; fsPutArcs=!fsPutArcs; break;
 			case 'd': case 'D': stored = 0; fsShowAllFiles=!fsShowAllFiles; break;
 			case 'e': case 'E': fsEditRegisterExt(); break;
+			case 'f': case 'F':
+			{ /* type the folder (TAB completes), prefilled with the folder open in the browser;
+			     an empty field means "where OCP is started" */
+				char *edit = fsNativeCurrentDir ();
+				int r;
+				if (!edit)
+				{
+					edit = strdup ((fsStartPath && strcmp (fsStartPath, ".")) ? fsStartPath : "");
+				}
+				if (!edit)
+				{
+					break;
+				}
+				displaystr (plScrHeight-1, 0, 0x17, "  type the folder, TAB completes the name, empty = where OCP is started, ENTER to accept, ESC to cancel", plScrWidth);
+				displayvoid (15, 0, plScrWidth);
+				displaystr (15, 0, 0x07, "F:  start directory:", 21);
+				EditStringSetCompletion (fsCompletePath);
+				while ((r = EditStringUTF8 (15, 21, plScrWidth - 21, &edit)) > 0)
+				{
+				}
+				EditStringSetCompletion (0);
+				if (!r)
+				{
+					free (fsStartPath);
+					fsStartPath = strdup (edit[0] ? edit : ".");
+					stored = 0;
+				}
+				free (edit);
+				break;
+			}
 			case '+': if (fsFPS<1000) fsFPS++; break;
 			case '-': if (fsFPS>1) fsFPS--; break;
 			case KEY_CTRL_S:
@@ -3046,6 +3257,7 @@ superbreak:
 				/*cfSetProfileInt(sec, "", fsInfoMode);*/
 				cfSetProfileBool(sec, "putarchives", fsPutArcs);
 				cfSetProfileBool(sec, "showallfiles", fsShowAllFiles);
+				cfSetProfileString(sec, "path", fsStartPath ? fsStartPath : ".");
 				cfSetProfileInt("screen", "fps", fsFPS, 10);
 				cfStoreConfig();
 				stored = 1;
@@ -3860,7 +4072,9 @@ static int fsEditViewPath(void)
 		state = 1;
 	}
 
+	EditStringSetCompletion (fsCompletePath);
 	retval = EditStringUTF8(1, 0, plScrWidth, &temppath);
+	EditStringSetCompletion (0);
 
 	if (retval > 0)
 	{

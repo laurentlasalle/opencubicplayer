@@ -464,6 +464,75 @@ int EditStringUTF8z (unsigned int y, unsigned int x, unsigned int w, int l, char
 }
 
 
+static int (*edit_complete)(const char *typed, char ***matches);
+static char **edit_matches;
+static int edit_matches_count;
+static int edit_matches_index; /* -1 = the common part is shown */
+
+void EditStringSetCompletion (int (*complete)(const char *typed, char ***matches))
+{
+	edit_complete = complete;
+}
+
+static void edit_matches_free (void)
+{
+	int i;
+	for (i = 0; i < edit_matches_count; i++)
+	{
+		free (edit_matches[i]);
+	}
+	free (edit_matches);
+	edit_matches = 0;
+	edit_matches_count = 0;
+}
+
+/* replaces the first *curpos characters of the work string with str; returns 0 on failure */
+static int edit_replace_head (struct VisualCharacter_t **data, int *length, int *size, char **visual, int *curpos, const char *str)
+{
+	int left = strlen (str), n = 0, incr = 0, i;
+	const char *p;
+	struct VisualCharacter_t *head = malloc ((left + 1) * sizeof (head[0]));
+	if (!head)
+	{
+		return 0;
+	}
+	for (p = str; *p; p += incr, left -= incr)
+	{
+		head[n].codepoint = utf8_decode (p, left, &incr);
+		head[n].visualwidth = measurestr_utf8 (p, incr);
+		n++;
+	}
+	if (*length - *curpos + n + 1 > *size)
+	{
+		int newsize = *length - *curpos + n + 64;
+		void *t1 = realloc (*data, newsize * sizeof ((*data)[0]));
+		void *t2;
+		if (!t1)
+		{
+			free (head);
+			return 0;
+		}
+		*data = t1;
+		t2 = realloc (*visual, newsize * 4 + 1);
+		if (!t2)
+		{
+			free (head);
+			return 0;
+		}
+		*visual = t2;
+		*size = newsize;
+	}
+	memmove (*data + n, *data + *curpos, sizeof ((*data)[0]) * (*length - *curpos));
+	for (i = 0; i < n; i++)
+	{
+		(*data)[i] = head[i];
+	}
+	*length = *length - *curpos + n;
+	*curpos = n;
+	free (head);
+	return 1;
+}
+
 static int _EditStringUTF8(unsigned int y, unsigned int x, unsigned int w, char **s, int ASCIIonly)
 {
 /* problems:
@@ -577,6 +646,78 @@ static int _EditStringUTF8(unsigned int y, unsigned int x, unsigned int w, char 
 	while (Console.KeyboardHit())
 	{
 		uint16_t key = Console.KeyboardGetChar();
+		if ((key != KEY_TAB) && edit_matches)
+		{ /* any other key ends the TAB cycle */
+			edit_matches_free ();
+		}
+		if ((key == KEY_TAB) && edit_complete)
+		{
+			const char *replacement = 0;
+			if (!edit_matches)
+			{
+				char *typed = malloc (curpos * 4 + 1);
+				int typedlen = 0;
+				if (!typed)
+				{
+					continue;
+				}
+				for (i=0, ptr=typed; i < curpos; i++)
+				{
+					ptr += utf8_encode (ptr, workstring_data[i].codepoint);
+				}
+				*ptr = 0;
+				typedlen = ptr - typed;
+				edit_matches_count = edit_complete (typed, &edit_matches);
+				if (edit_matches_count <= 0)
+				{
+					edit_matches_free ();
+				} else if (edit_matches_count == 1)
+				{
+					replacement = edit_matches[0];
+					edit_matches_index = 0;
+				} else {
+					/* longest common part (bytes, cut back to a whole UTF-8 character) */
+					int common = strlen (edit_matches[0]), j;
+					for (j = 1; j < edit_matches_count; j++)
+					{
+						int k = 0;
+						while ((k < common) && edit_matches[j][k] && (edit_matches[j][k] == edit_matches[0][k]))
+						{
+							k++;
+						}
+						common = k;
+					}
+					while (common && ((edit_matches[0][common] & 0xc0) == 0x80))
+					{
+						common--;
+					}
+					if (common > typedlen)
+					{
+						char *part = malloc (common + 1);
+						if (part)
+						{
+							memcpy (part, edit_matches[0], common);
+							part[common] = 0;
+							edit_replace_head (&workstring_data, &workstring_length, &workstring_size, &visualstring_buffer, &curpos, part);
+							free (part);
+						}
+						edit_matches_index = -1;
+					} else {
+						replacement = edit_matches[0];
+						edit_matches_index = 0;
+					}
+				}
+				free (typed);
+			} else {
+				edit_matches_index = (edit_matches_index + 1) % edit_matches_count;
+				replacement = edit_matches[edit_matches_index];
+			}
+			if (replacement)
+			{
+				edit_replace_head (&workstring_data, &workstring_length, &workstring_size, &visualstring_buffer, &curpos, replacement);
+			}
+			continue;
+		}
 		if ((key>=0x20)&&(key<=0xFF))
 		{
 			uint32_t codepoint;
@@ -674,9 +815,11 @@ static int _EditStringUTF8(unsigned int y, unsigned int x, unsigned int w, char 
 				free (workstring_data);     workstring_data = 0;
 				free (visualstring_buffer); visualstring_buffer = 0;
 				state = 0;
+				edit_matches_free ();
 				return -1;
 			case _KEY_ENTER:
 				setcurshape(0);
+				edit_matches_free ();
 				free (*s);
 				*s = malloc (workstring_length * 4 + 1);
 				if (*s)
@@ -702,6 +845,10 @@ static int _EditStringUTF8(unsigned int y, unsigned int x, unsigned int w, char 
 				cpiKeyHelp(KEY_BACKSPACE, "Remove character left of cursor");
 				cpiKeyHelp(KEY_ESC, "Cancel changes");
 				cpiKeyHelp(_KEY_ENTER, "Submit changes");
+				if (edit_complete)
+				{
+					cpiKeyHelp(KEY_TAB, "Complete the name (again: next match)");
+				}
 				state = 2;
 				return 1;
 		}

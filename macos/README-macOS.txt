@@ -22,7 +22,8 @@ Settings and files
 - Configuration: ~/.config/ocp/ocp.ini (created on the first start). If you have
   used another version of OCP before, delete or rename this file to get the
   Omni defaults (128x48 window, tracker view settings...).
-- The file selector starts in your home folder.
+- The file selector starts in your home folder; another start folder can be
+  set in ALT-C (item F, TAB completes folder names, ALT-S saves).
 - The window opens where it was when OCP was last closed (centered the first
   time).
 - HiDPI (Retina) screens are drawn at full resolution. [screen] sdlscale= in
