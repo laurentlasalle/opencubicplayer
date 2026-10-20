@@ -182,6 +182,12 @@ while todo:
 print('bundled:', ' '.join(sorted(copied)))
 PY
 
+# nothing may still point outside the bundle
+LEFT=$(find "$APP" -type f \( -name "*.dylib" -o -perm -u+x \) -exec otool -L {} + 2>/dev/null | grep -E "^\s+(/opt/|/usr/local/|$WORK)" || true)
+if test -n "$LEFT"; then echo "references outside the bundle:"; echo "$LEFT"; exit 1; fi
+echo "plugins: $(ls "$RES/autoload" | wc -l | tr -d ' '), frameworks: $(ls "$APP/Contents/Frameworks" | wc -l | tr -d ' ')"
+"$APP/Contents/MacOS/ocp" --help 2>&1 | head -3 || true
+
 # every Mach-O file must carry a signature on Apple Silicon (install_name_tool broke them)
 find "$APP" -type f \( -name "*.dylib" -o -perm -u+x \) | while read -r f; do
 	if file "$f" | grep -q Mach-O; then codesign --force --sign - "$f" 2> /dev/null; fi
