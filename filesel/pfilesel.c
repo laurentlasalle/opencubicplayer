@@ -924,10 +924,103 @@ int fsPutArcs=1;
 int fsWriteModInfo=1;
 int fsShowAllFiles=0;
 static int fsPlaylistOnly=0;
+int fsAutoNext=1;
+
+/* autonext: when a file started from the browser ends and the playlist is empty,
+ * continue with the next playable file of the same directory (in sorted order). */
+static struct ocpfile_t *autonext_file = 0; /* last file played from the browser/autonext, ref'd */
+static struct ocpdir_t  *autonext_dir  = 0; /* its directory, ref'd */
+static struct modlist   *autonext_list = 0; /* cached sorted listing of autonext_dir */
+
+static void autonext_clear (void)
+{
+	if (autonext_list)
+	{
+		modlist_free (autonext_list);
+		autonext_list = 0;
+	}
+	if (autonext_file)
+	{
+		autonext_file->unref (autonext_file);
+		autonext_file = 0;
+	}
+	if (autonext_dir)
+	{
+		autonext_dir->unref (autonext_dir);
+		autonext_dir = 0;
+	}
+}
+
+static void autonext_set (struct ocpfile_t *file)
+{
+	if (!fsAutoNext || fsPlaylistOnly || !file || !file->parent)
+	{
+		autonext_clear ();
+		return;
+	}
+	file->ref (file);
+	if (autonext_file)
+	{
+		autonext_file->unref (autonext_file);
+	}
+	autonext_file = file;
+	if (autonext_dir != file->parent)
+	{ /* new directory: drop the cached listing */
+		if (autonext_list)
+		{
+			modlist_free (autonext_list);
+			autonext_list = 0;
+		}
+		if (autonext_dir)
+		{
+			autonext_dir->unref (autonext_dir);
+		}
+		autonext_dir = file->parent;
+		autonext_dir->ref (autonext_dir);
+	}
+}
+
+/* direction: +1 next, -1 previous, 0 the current file itself. Returns an entry inside autonext_list, or NULL */
+static struct modlistentry *autonext_pick (int direction)
+{
+	int i;
+
+	if (!autonext_file || !autonext_dir)
+	{
+		return 0;
+	}
+	if (!autonext_list)
+	{
+		if (!(autonext_list = modlist_create ()))
+		{
+			return 0;
+		}
+		fsReadDir (autonext_list, autonext_dir, curmask, 0);
+		modlist_sort (autonext_list);
+	}
+	i = modlist_find (autonext_list, autonext_file->dirdb_ref);
+	if (i < 0)
+	{
+		return 0;
+	}
+	if (!direction)
+	{
+		return modlist_get (autonext_list, i);
+	}
+	for (i += direction; (i >= 0) && (i < (int)autonext_list->num); i += direction)
+	{
+		struct modlistentry *m = modlist_get (autonext_list, i);
+		if (m->file && (m->flags & MODLIST_FLAG_ISMOD))
+		{
+			return m;
+		}
+	}
+	return 0;
+}
 
 int fsFilesLeft(void)
 {
-	return (isnextplay!=NextPlayNone)||playlist->num;
+	return (isnextplay!=NextPlayNone)||playlist->num||(autonext_pick(1)!=0);
 }
 
 /* returns zero if fsReadDir() fails */
@@ -1035,9 +1128,38 @@ int fsGetPrevFile (struct moduleinfostruct *info, struct ocpfilehandle_t **fileh
 		case NextPlayNone:
 			if (!playlist->num)
 			{
-				fprintf(stderr, "BUG in pfilesel.c: fsGetNextFile() invalid NextPlayPlaylist #2\n");
+				struct ocpfile_t *f;
+				/* autonext: previous playable file in the directory, or restart the first one */
+				if (!(m = autonext_pick (-1)) && !(m = autonext_pick (0)))
+				{
+					return retval;
+				}
+				mdbGetModuleInfo (info, m->mdb_ref);
+				f = m->file;
+				f->ref (f);
+				*filehandle = f->open (f);
+				if (*filehandle)
+				{
+					struct ocpfilehandle_t *ancient;
+					if ((ancient = ancient_filehandle (0, 0, *filehandle)))
+					{
+						(*filehandle)->unref (*filehandle);
+						*filehandle = ancient;
+					}
+					if (!mdbInfoIsAvailable(m->mdb_ref))
+					{
+						mdbReadInfo(info, *filehandle);
+						(*filehandle)->seek_set (*filehandle, 0);
+						mdbWriteModuleInfo(m->mdb_ref, info);
+						mdbGetModuleInfo(info, m->mdb_ref);
+					}
+					retval = 1;
+				}
+				autonext_set (f); /* m may be invalid after this */
+				f->unref (f);
 				return retval;
 			}
+			autonext_clear ();
 			if (fsListScramble)
 				return fsGetNextFile (info, filehandle);
 			if (playlist->pos)
@@ -1101,6 +1223,7 @@ int fsGetNextFile (struct moduleinfostruct *info, struct ocpfilehandle_t **fileh
 	struct modlistentry *m;
 	unsigned int pick=0;
 	int retval=0;
+	struct ocpfile_t *autonext_next = 0; /* set if this file comes from the browser or autonext */
 
 	*filehandle = 0;
 
@@ -1108,6 +1231,7 @@ int fsGetNextFile (struct moduleinfostruct *info, struct ocpfilehandle_t **fileh
 	{
 		case NextPlayBrowser:
 			m=nextplay;
+			autonext_next = m->file;
 			break;
 		case NextPlayPlaylist:
 			if (!playlist->num)
@@ -1115,15 +1239,22 @@ int fsGetNextFile (struct moduleinfostruct *info, struct ocpfilehandle_t **fileh
 				fprintf(stderr, "BUG in pfilesel.c: fsGetNextFile() invalid NextPlayPlaylist #1\n");
 				return retval;
 			}
+			autonext_clear ();
 			pick = playlist->pos;
 			m = modlist_get (playlist, pick);
 			break;
 		case NextPlayNone:
 			if (!playlist->num)
 			{
+				if ((m = autonext_pick (1)))
+				{
+					autonext_next = m->file;
+					break;
+				}
 				fprintf(stderr, "BUG in pfilesel.c: fsGetNextFile() invalid NextPlayPlaylist #2\n");
 				return retval;
 			}
+			autonext_clear ();
 			if (fsListScramble)
 				pick = rand() % playlist->num;
 			else
@@ -1165,6 +1296,16 @@ int fsGetNextFile (struct moduleinfostruct *info, struct ocpfilehandle_t **fileh
 	}
 
 //errorout:
+	if (autonext_next)
+	{
+		/* remember where we are, even if opening failed, so the next call moves on */
+		autonext_set (autonext_next); /* m may be invalid after this */
+		if (isnextplay == NextPlayBrowser)
+		{
+			isnextplay = NextPlayNone;
+		}
+		return retval;
+	}
 	switch (isnextplay)
 	{
 		case NextPlayBrowser:
@@ -1245,6 +1386,7 @@ int fsPreInit (const struct configAPI_t *configAPI)
 	fsListScramble =  configAPI->GetProfileBool2  (sec,                  "fileselector",  "randomplay",   1, 1);
 	fsPutArcs      =  configAPI->GetProfileBool2  (sec,                  "fileselector",  "putarchives",  1, 1);
 	fsLoopMods     =  configAPI->GetProfileBool2  (sec,                  "fileselector",  "loop",         1, 1);
+	fsAutoNext     =  configAPI->GetProfileBool2  (sec,                  "fileselector",  "autonext",     1, 1);
 	fsListRemove   =  configAPI->GetProfileBool   (                      "commandline_f", "r",            fsListRemove, 0);
 	fsListScramble = !configAPI->GetProfileBool   (                      "commandline_f", "o",           !fsListScramble, 1);
 	fsLoopMods     =  configAPI->GetProfileBool   (                      "commandline_f", "l",            fsLoopMods, 0);
@@ -1402,6 +1544,7 @@ int fsInit(void)
 
 void fsClose(void)
 {
+	autonext_clear ();
 	if (currentdir)
 	{
 		modlist_free(currentdir);

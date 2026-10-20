@@ -92,6 +92,7 @@
   playonce=on
   randomplay=off
   loop=off
+  autonext=on             ; when a file started from the browser ends (and the playlist is empty), play the next file of the same directory
   path=.
   showallfiles=off        ; Show all files in the filebrowser, or just audio/music files
 
