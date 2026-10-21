@@ -260,6 +260,7 @@ lpf_Qpct=100              ; For stereo model "empiric+lpf", this sets the Q valu
   NSF=13
   NSFe=13
   SAP=13
+  S98=14
   SNDH=13
   SPC=13
   VGM=13
