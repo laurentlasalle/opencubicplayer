@@ -1,21 +1,23 @@
 # Open Cubic Player — Omni
 
-> **This is Omni, an unofficial fork of [Open Cubic Player](https://github.com/mywave82/opencubicplayer) by Stian Skjelstad, with a ready-to-use Windows x64 build.**
+> **This is Omni, an unofficial fork of [Open Cubic Player](https://github.com/mywave82/opencubicplayer) by Stian Skjelstad, with ready-to-use builds for Windows x64 and macOS (Apple Silicon).**
 > Please report problems with Omni [here](https://github.com/laurentlasalle/opencubicplayer/issues), not to the upstream project.
 
-Omni releases are named `<upstream version>-omni.<release>` (for example `3.5.0-omni.8`) and are available on the [Releases](https://github.com/laurentlasalle/opencubicplayer/releases) page.
-The title bar shows `Open Cubic Player v3.5.0 - Omni v8`.
+Omni releases are named `<upstream version>-omni.<release>` (for example `3.5.0-omni.9`) and are available on the [Releases](https://github.com/laurentlasalle/opencubicplayer/releases) page.
+The title bar shows `Open Cubic Player v3.5.0 - Omni v9`.
 
 ![Screenshot](doc/screenshot-omni8-01.png)
 
 What Omni adds to upstream:
 
-- **Tracker view for chiptunes**: NSF/NSFe (NES, with VRC6, VRC7, FDS, MMC5, N163 and Sunsoft 5B), HES (PC Engine) and GBS (Game Boy) files are shown as a pattern view rebuilt from the sound chip registers, synchronized with the audio, with per-channel muting. This uses the visualisation API of the [Omni fork of game-music-emu](https://github.com/laurentlasalle/game-music-emu/tree/ocp).
-- **S98 player** (NEC PC-88/PC-98, Sharp X1/X68000) based on [libvgm](https://github.com/ValleyBell/libvgm).
-- **Track length, loops and fade-out** for Game Music Emu formats that do not store a length (plain NSF, GBS, KSS...), and a `setup:/gmeconfig.dev` dialog.
-- **Directories acts as playlist** by default, so the player will move to the next file of the directory when a song ends (playlist mode is still supported).
-- **Integer HiDPI scaling** of the SDL3 window, following the scale of the screen it is on.
+- **Tracker view for chiptunes**: NSF/NSFe (NES, with VRC6, VRC7, FDS, MMC5, N163 and Sunsoft 5B), HES (PC Engine), GBS (Game Boy), SPC (SNES), VGM/VGZ and GYM (Genesis, Master System, MSX, PC-98, X68000) and S98 (PC-88/PC-98) files are shown as a pattern view rebuilt from the sound chip registers, synchronized with the audio, with the channel names in the header and per-channel muting. Upcoming rows are filled in advance. This uses the visualisation API of the [Omni fork of game-music-emu](https://github.com/laurentlasalle/game-music-emu/tree/ocp).
+- **S98 player** (NEC PC-88/PC-98, Sharp X1/X68000) and **VGM/VGZ for every chip** (MSX AY-3-8910 and Konami SCC, YM2151, YM2203, YM2608) based on [libvgm](https://github.com/ValleyBell/libvgm); VGZ files play directly.
+- **Track length, loops and fade-out** for Game Music Emu formats that do not store a length (plain NSF, GBS, KSS), and a `setup:/gmeconfig.dev` dialog.
+- **Directories act as playlists** by default, so the player moves to the next file of the directory when a song ends (playlist mode is still supported), with **shuffle play** in rounds (`off` / `on` / `endless`).
+- **File browser**: starts in your Music folder (or a folder set in `ALT-C`, with TAB completion of folder names), archives shown as folders, volume kept from one file to the next.
+- **Integer HiDPI scaling** of the SDL3 window, following the scale of the screen it is on; 128x48 text mode by default.
 - **Windows**: GUI application (no console window), automatic log file with timestamped startup steps, and scripts to cross-compile the Windows release from Linux with llvm-mingw ([windows/](windows/), see [README-Windows.txt](windows/README-Windows.txt)).
+- **macOS**: self-contained application bundle with sharp Retina display, built by [macos/build-macos.sh](macos/build-macos.sh) (see [README-macOS.txt](macos/README-macOS.txt)).
 
 The upstream README follows.
 
