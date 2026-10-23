@@ -171,6 +171,8 @@ Omni v9 (3.5.0-omni.9)
    the automatic advance in a directory; random order no longer the same at
    every start
  - VGM / VGZ files for MSX, PC-98, X68000, arcade... played by libvgm
+ - VGZ files are shown as plain files (no longer as a directory holding a
+   .vgm): Enter plays them, and the automatic advance goes through them
  - S98 files in yellow in the file browser
 Omni v8 (3.5.0-omni.8, 2026-10-20)
  - Tracker view: the upcoming rows are filled in advance (a second, silent

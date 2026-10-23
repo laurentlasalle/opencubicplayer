@@ -928,16 +928,9 @@ static struct ocpdir_t *gzip_check (const struct ocpdirdecompressor_t *ref, stru
 		return retval;
 	}
 
-	if (!strcasecmp (filetype, ".vgz"))
-	{
-		dirdbGetName_malloc (s->dirdb_ref, &newname);
-		DEBUG_PRINT ("[GZIP gzip_check]: %s\n", newname);
-		l = strlen (newname);
-		strcpy (newname + l - 4, ".vgm");
-		retval = gzip_check_steal (s, dirdbFindAndRef (s->dirdb_ref, newname, dirdb_use_file));
-		free (newname);
-		return retval;
-	}
+	/* .vgz (gzip-compressed VGM) is no longer shown as a directory holding a .vgm: it stays a
+	 * plain file, detected and played through the transparent decompression (ancient), so it
+	 * can be played directly and by the automatic advance in its directory */
 
 	return 0;
 }

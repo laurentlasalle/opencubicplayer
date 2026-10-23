@@ -155,8 +155,11 @@ int mdbInfoIsAvailable (uint32_t mdb_ref)
 		DEBUG_PRINT ("mdbInfoIsAvailable(0x%08"PRIx32") => 1 due to modtype != mtUnRead\n", mdb_ref);
 	}
 
-	if (mdbData[mdb_ref].mie.general.modtype.integer.i == mtUnknown)
-	{ /* Avoid rescan, if file is already scanned by this version or newer */
+	if ((mdbData[mdb_ref].mie.general.modtype.integer.i == mtUnknown) ||
+	    (mdbData[mdb_ref].mie.general.modtype.integer.i == MODULETYPE("OPL")))
+	{ /* Avoid rescan, if file is already scanned by this version or newer. OPL files too:
+	   * AdPlug claims files by their extension when no other plugin recognizes them (VGM files
+	   * for MSX, PC-98... before Omni v9), so they are checked again once by a newer version */
 		if (mdbData[mdb_ref].mie.general.lastscanversion[0] < OCP_MAJOR_VERSION) return 0;
 		if (mdbData[mdb_ref].mie.general.lastscanversion[0] > OCP_MAJOR_VERSION) return 1;
 
@@ -487,8 +490,8 @@ int mdbWriteModuleInfo (uint32_t mdb_ref, struct moduleinfostruct *m)
 	temp = mdbData[mdb_ref].mie.general.comment_ref;  retval |= mdbWriteString (m->comment,  &temp); mdbData[mdb_ref].mie.general.comment_ref  = temp;
 	temp = mdbData[mdb_ref].mie.general.album_ref;    retval |= mdbWriteString (m->album,    &temp); mdbData[mdb_ref].mie.general.album_ref    = temp;
 
-	if (m->modtype.integer.i == mtUnknown)
-	{ /* tag the version number to disk */
+	if ((m->modtype.integer.i == mtUnknown) || (m->modtype.integer.i == MODULETYPE("OPL")))
+	{ /* tag the version number to disk (see mdbInfoIsAvailable) */
 		mdbData[mdb_ref].mie.general.lastscanversion[0] = OCP_MAJOR_VERSION;
 		mdbData[mdb_ref].mie.general.lastscanversion[1] = OCP_MINOR_VERSION;
 		mdbData[mdb_ref].mie.general.lastscanversion[2] = OCP_SCAN_PATCH_VERSION;
