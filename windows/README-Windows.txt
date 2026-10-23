@@ -135,10 +135,12 @@ Game Music Emu only emulates the Sega chips (SN76489, YM2612, YM2413). VGM
 and VGZ files that use other chips (AY-3-8910, Konami SCC, YM2151, YM2203,
 YM2608, arcade PCM chips...) are now played by libvgm, like the S98 files,
 and show the type "VGMX" in the file browser. Loops and fade follow the
-[gme] section. These files have no tracker view; VGM files for Sega
+[gme] section. The tracker view shows the AY-3-8910 / YM2149, Konami SCC
+(5 channels, "SC1" to "SC5"), YM2151, YM2203, YM2608, YM2612, YM2413 and
+SN76489 channels; PCM and OPL chips are not shown. VGM files for Sega
 consoles keep using Game Music Emu with its tracker view, and OPL-only VGM
-files keep using AdPlug. Files already scanned by a previous version keep
-their old type until rescanned (ALT-R).
+files keep using AdPlug. Files that a previous version tagged as OPL are
+checked again automatically.
 
 S98 files (NEC PC-88/PC-98, Sharp X1/X68000) - section [s98]
 -----------------------------------------------------------
@@ -170,7 +172,8 @@ Omni v9 (3.5.0-omni.9)
  - Shuffle play: off / on (each file once) / endless (new rounds), also for
    the automatic advance in a directory; random order no longer the same at
    every start
- - VGM / VGZ files for MSX, PC-98, X68000, arcade... played by libvgm
+ - VGM / VGZ files for MSX, PC-98, X68000, arcade... played by libvgm, with
+   the tracker view (new: Konami SCC)
  - VGZ files are shown as plain files (no longer as a directory holding a
    .vgm): Enter plays them, and the automatic advance goes through them
  - S98 files in yellow in the file browser

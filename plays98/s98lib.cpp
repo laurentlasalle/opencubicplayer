@@ -176,7 +176,7 @@ extern "C" void s98lib_getinfo (struct s98lib_t *s, struct s98lib_info_t *info)
 	}
 }
 
-extern "C" void s98lib_mute (struct s98lib_t *s, int device, uint32_t mask, uint32_t linkedmask)
+extern "C" void s98lib_mute (struct s98lib_t *s, uint32_t device, uint32_t mask, uint32_t linkedmask)
 {
 	PLR_MUTE_OPTS o;
 	PlayerBase *p = s->player.GetPlayer ();
@@ -187,5 +187,5 @@ extern "C" void s98lib_mute (struct s98lib_t *s, int device, uint32_t mask, uint
 	o.disable = 0x00;
 	o.chnMute[0] = mask;
 	o.chnMute[1] = linkedmask;
-	p->SetDeviceMuting ((UINT32)device, o);
+	p->SetDeviceMuting (device, o);
 }

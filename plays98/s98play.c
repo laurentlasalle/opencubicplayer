@@ -204,9 +204,9 @@ OCP_INTERNAL void s98SetMute (struct cpifaceSessionAPI_t *cpifaceSession, int ch
 			mask[v >> 20][(v >> 19) & 1] |= v & 0x7FFFF;
 		}
 	}
-	for (i = 0; i < 8; i++)
+	for (i = 0; (i < 8) && (i < s98vis_devcount (vis)); i++)
 	{
-		s98lib_mute (s98session, i, mask[i][0], mask[i][1]);
+		s98lib_mute (s98session, s98vis_muteid (vis, i), mask[i][0], mask[i][1]);
 	}
 }
 

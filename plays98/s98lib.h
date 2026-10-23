@@ -26,7 +26,7 @@ void     s98lib_restart (struct s98lib_t *s);
 void     s98lib_setspeed (struct s98lib_t *s, double speed);
 void     s98lib_getinfo (struct s98lib_t *s, struct s98lib_info_t *info);
 double   s98lib_curtime (struct s98lib_t *s); /* seconds played, loops included */
-void     s98lib_mute (struct s98lib_t *s, int device, uint32_t mask, uint32_t linkedmask); /* device = index in the S98 header */
+void     s98lib_mute (struct s98lib_t *s, uint32_t device, uint32_t mask, uint32_t linkedmask); /* device: index in the S98 header, or libvgm id (0x80000000 | type | instance << 16) */
 
 #ifdef __cplusplus
 }

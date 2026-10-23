@@ -95,6 +95,7 @@ static const char *short_name (const char *n, char *buf)
 	if (!strncmp (n, "OPLL ", 5)) { snprintf (buf, 8, "OL%s", n + 5); return buf; }
 	if (!strncmp (n, "Voice ", 6)) { snprintf (buf, 8, "V%s", n + 6); return buf; }
 	if (!strncmp (n, "SSG ", 4)) { snprintf (buf, 8, "SG%s", n + 4); return buf; }
+	if (!strncmp (n, "SCC ", 4)) { snprintf (buf, 8, "SC%s", n + 4); return buf; }
 	if (!strcmp (n, "Rhythm")) return "Rhy";
 	if (!strcmp (n, "ADPCM")) return "PCM";
 	return n;

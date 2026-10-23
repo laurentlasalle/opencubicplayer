@@ -7,10 +7,12 @@ struct nsfvis_layout_t;
 struct nsfvis_ch_t;
 struct s98vis_t;
 
-struct s98vis_t *s98vis_open (const uint8_t *data, uint32_t len);
+struct s98vis_t *s98vis_open (const uint8_t *data, uint32_t len); /* S98 or VGM */
 void s98vis_close (struct s98vis_t *v);
 void s98vis_reset (struct s98vis_t *v); /* back to the start of the song */
 const struct nsfvis_layout_t *s98vis_layout (struct s98vis_t *v);
+int s98vis_devcount (struct s98vis_t *v);
+uint32_t s98vis_muteid (struct s98vis_t *v, int dev); /* device id for s98lib_mute */
 
 /* reads the song up to time t (seconds, loops included); emit() is called for each
  * frame (every 1/60 s) with its song time and decoded channels */
