@@ -38,6 +38,7 @@ Keyboard
   macOS to switch desktops: use < and > instead, or turn off "Move left/right a
   space" in System Settings > Keyboard > Keyboard Shortcuts > Mission Control.
 - F1 = help, Alt-K = list of the keys available on the current screen.
+- Cmd+Q, or Quit in the application menu, quits OCP.
 
 Command line
 ------------

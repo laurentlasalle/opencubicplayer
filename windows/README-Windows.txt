@@ -168,7 +168,7 @@ If ocp.exe reports that VCRUNTIME140.dll is missing, install the
 Release history
 ---------------
 Omni v1 to v6 were distributed as "3.5.1" to "3.5.6".
-Omni v9 (3.5.0-omni.9)
+Omni v9 (3.5.0-omni.9, 2026-10-23)
  - Shuffle play: off / on (each file once) / endless (new rounds), also for
    the automatic advance in a directory; random order no longer the same at
    every start
@@ -179,6 +179,7 @@ Omni v9 (3.5.0-omni.9)
  - S98 files in yellow in the file browser
  - ZIP and other archives are shown as folders to enter by default
    (putarchives=off; ALT-C item C, renamed "list archive contents inline")
+ - macOS: "Quit Open Cubic Player" in the application menu (and Cmd+Q) quits
 Omni v8 (3.5.0-omni.8, 2026-10-20)
  - Tracker view: the upcoming rows are filled in advance (a second, silent
    emulator runs a few seconds ahead of the audio)

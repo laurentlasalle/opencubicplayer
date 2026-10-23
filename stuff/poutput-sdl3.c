@@ -179,6 +179,7 @@ static void sdl3_SetWindowMinimumSize (SDL_Window *w, int pw, int ph)
 }
 
 static int cachemode = -1;
+static int sdl3_close_requested = 0; /* see SDL_EVENT_QUIT */
 
 static void (*set_state)(const int fullscreen, int width, int height, const int window_resized) = 0;
 static int current_fullsceen = 0;
@@ -1429,6 +1430,16 @@ static int ekbhit_sdl3dummy(void)
 		static int skipone = 0;
 		switch (event.type)
 		{
+			case SDL_EVENT_QUIT: /* macOS: "Quit" in the application menu, Cmd+Q. SDL also sends it
+			                        after closing the last window: that one is already handled */
+				if (sdl3_close_requested)
+				{
+					sdl3_close_requested = 0;
+					break;
+				}
+				___push_key(KEY_EXIT);
+				break;
+
 			case SDL_EVENT_TERMINATING:
 #ifdef SDL3_DEBUG
 				fprintf(stderr, "[SDL3-video] SDL_EVENT_WINDOW_CLOSE_REQUESTED\n");
@@ -1438,6 +1449,7 @@ static int ekbhit_sdl3dummy(void)
 
 			case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
 			{
+				sdl3_close_requested = 1;
 #ifdef SDL3_DEBUG
 				fprintf(stderr, "[SDL3-video] SDL_EVENT_WINDOW_CLOSE_REQUESTED\n");
 #endif
@@ -1839,6 +1851,7 @@ int sdl3_init(void)
 	SDL_SetEventEnabled (SDL_EVENT_WINDOW_MOVED, true);
 #endif
 
+	SDL_SetEventEnabled (SDL_EVENT_QUIT, true);
 	SDL_SetEventEnabled (SDL_EVENT_TERMINATING, true);
 	SDL_SetEventEnabled (SDL_EVENT_WINDOW_CLOSE_REQUESTED, true);
 	SDL_SetEventEnabled (SDL_EVENT_WINDOW_RESIZED, true);
