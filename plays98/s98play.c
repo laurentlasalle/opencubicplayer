@@ -570,8 +570,11 @@ OCP_INTERNAL int s98OpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 		return errFileRead;
 	}
 
-	s98_cfg_loops = cpifaceSession->configAPI->GetProfileInt ("s98", "loops", 2, 10);
-	s98_cfg_fade  = cpifaceSession->configAPI->GetProfileInt ("s98", "fade",  8, 10);
+	{ /* VGM files (other chips than the Sega ones) follow the [gme] settings like the other VGM files */
+		const char *sec = ((datalen >= 4) && !memcmp (data, "Vgm ", 4)) ? "gme" : "s98";
+		s98_cfg_loops = cpifaceSession->configAPI->GetProfileInt (sec, "loops", 2, 10);
+		s98_cfg_fade  = cpifaceSession->configAPI->GetProfileInt (sec, "fade",  8, 10);
+	}
 	if (s98_cfg_loops < 1) s98_cfg_loops = 1;
 	if (s98_cfg_loops > 100) s98_cfg_loops = 100;
 	if (s98_cfg_fade < 0) s98_cfg_fade = 0;

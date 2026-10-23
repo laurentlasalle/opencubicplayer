@@ -1,4 +1,4 @@
-Open Cubic Player v3.5.0 - Omni v8 (unofficial Windows x64 build)
+Open Cubic Player v3.5.0 - Omni v9 (unofficial Windows x64 build)
 ==================================================================
 Omni is an unofficial build of Open Cubic Player by Stian Skjelstad
 (https://github.com/mywave82/opencubicplayer), based on its git master of
@@ -6,7 +6,7 @@ Omni is an unofficial build of Open Cubic Player by Stian Skjelstad
 Source and releases: https://github.com/laurentlasalle/opencubicplayer
 Please report problems of this build there, not to the upstream project.
 
-Versions are named <upstream version>-omni.<release>, e.g. 3.5.0-omni.8.
+Versions are named <upstream version>-omni.<release>, e.g. 3.5.0-omni.9.
 
 Start: double-click ocp.exe (SDL3 window, no console window).
 Requires Windows 10 or 11, 64-bit.
@@ -55,6 +55,17 @@ During playback, Enter skips to the next file of the directory.
     loop=off       required: with loop=on (Ctrl+L) the file loops forever
                    and nothing advances
 If the playlist (right pane) holds files, it has priority, as before.
+
+Shuffle play (ALT-C, item 2; [fileselector] randomplay=)
+--------------------------------------------------------
+    off       files in order
+    on        each file of the directory (or of the playlist) once, in a
+              random order, then playback stops
+    endless   new shuffled rounds, without end; a round never starts with
+              the file that ended the previous one
+Shuffle applies both to the automatic advance in a directory and to the
+playlist. In a directory, "previous" (Ctrl+Left / <) goes back to the file
+played before. In endless mode, played files stay in the playlist.
 
 Track length of NSF, GBS, KSS, VGM... (section [gme])
 ----------------------------------------------------
@@ -118,6 +129,17 @@ in advance.
     rowframes=6      frames per row (1 to 32); 3 = more detail, 12 = more compact
 The other formats (KSS, AY, SAP...) have no tracker view.
 
+VGM files for other chips than the Sega ones (MSX, PC-98, arcade...)
+--------------------------------------------------------------------
+Game Music Emu only emulates the Sega chips (SN76489, YM2612, YM2413). VGM
+and VGZ files that use other chips (AY-3-8910, Konami SCC, YM2151, YM2203,
+YM2608, arcade PCM chips...) are now played by libvgm, like the S98 files,
+and show the type "VGMX" in the file browser. Loops and fade follow the
+[gme] section. These files have no tracker view; VGM files for Sega
+consoles keep using Game Music Emu with its tracker view, and OPL-only VGM
+files keep using AdPlug. Files already scanned by a previous version keep
+their old type until rescanned (ALT-R).
+
 S98 files (NEC PC-88/PC-98, Sharp X1/X68000) - section [s98]
 -----------------------------------------------------------
 Played by the new plays98 player, based on libvgm (Valley Bell), which
@@ -144,6 +166,12 @@ If ocp.exe reports that VCRUNTIME140.dll is missing, install the
 Release history
 ---------------
 Omni v1 to v6 were distributed as "3.5.1" to "3.5.6".
+Omni v9 (3.5.0-omni.9)
+ - Shuffle play: off / on (each file once) / endless (new rounds), also for
+   the automatic advance in a directory; random order no longer the same at
+   every start
+ - VGM / VGZ files for MSX, PC-98, X68000, arcade... played by libvgm
+ - S98 files in yellow in the file browser
 Omni v8 (3.5.0-omni.8, 2026-10-20)
  - Tracker view: the upcoming rows are filled in advance (a second, silent
    emulator runs a few seconds ahead of the audio)

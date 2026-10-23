@@ -14,6 +14,7 @@ struct modlistentry
 #define MODLIST_FLAG_DOTDOT  2
 #define MODLIST_FLAG_SCANNED 4
 #define MODLIST_FLAG_ISMOD   8
+#define MODLIST_FLAG_PLAYED 16 /* shuffle play: already played in the current round */
 	int flags;
 
 	uint32_t mdb_ref;

@@ -30,6 +30,7 @@
 #include "stuff/cp437.h"
 #include "stuff/err.h"
 #include "gmetype.h"
+#include "vgmchips.h"
 
 #ifndef MIN
 # define MIN(a,b) (((a)<(b))?(a):(b))
@@ -649,28 +650,17 @@ static int gmeReadInfoVGM (struct moduleinfostruct *m, struct ocpfilehandle_t *f
 			}
 			fp->seek_set (fp, 0);
 		}
-		if (h->psg_rate[0]    || h->psg_rate[1]    || h->psg_rate[2]    || h->psg_rate[3]    ||
-		    h->ym2413_rate[0] || h->ym2413_rate[1] || h->ym2413_rate[2] || h->ym2413_rate[3] ||
-		    h->ym2612_rate[0] || h->ym2612_rate[1] || h->ym2612_rate[2] || h->ym2612_rate[3] ||
-		    h->ym2151_rate[0] || h->ym2151_rate[1] || h->ym2151_rate[2] || h->ym2151_rate[3])
+		switch (vgm_chips_class ((const uint8_t *)buf, len))
 		{
-			m->modtype.integer.i = MODULETYPE("VGM");
-			return 1;
-		}
-		if ((len > 256) && (
-		    buf[0x50] || buf[0x51] || buf[0x52] || buf[0x53] || // OPL2
-		    buf[0x5c] || buf[0x5d] || buf[0x5e] || buf[0x5f])) // OPL3
-		{
-			m->modtype.integer.i = MODULETYPE("OPL");
-			return 1;
-		}
-		if ((len >= 0x60) &&
-		    (h->version[0] >= 0x50) && (h->version[1] == 0x01) &&
-		    (data_offset >= 0x0058) &&
-		    (h->ym3526_clock[0] || h->ym3526_clock[1] || h->ym3526_clock[2] || h->ym3526_clock[3])) // OPL / OPL1
-		{
-			m->modtype.integer.i = MODULETYPE("OPL");
-			return 1;
+			case VGM_CHIPS_SEGA:
+				m->modtype.integer.i = MODULETYPE("VGM");
+				return 1;
+			case VGM_CHIPS_OPL:
+				m->modtype.integer.i = MODULETYPE("OPL");
+				return 1;
+			default: /* other chips: plays98 (libvgm) takes the file */
+				(void)data_offset;
+				return 0;
 		}
 	}
 	return 0;

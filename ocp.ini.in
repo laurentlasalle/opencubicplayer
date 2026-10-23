@@ -90,7 +90,7 @@
   scanarchives=on
   putarchives=on
   playonce=on
-  randomplay=off
+  randomplay=off          ; shuffle play: off, on (each file once, in random order) or endless (new shuffled rounds)
   loop=off
   autonext=on             ; when a file started from the browser ends (and the playlist is empty), play the next file of the same directory
   path=                   ; start directory; empty = your Music folder (else your home folder), . = where OCP is started
@@ -264,6 +264,7 @@ lpf_Qpct=100              ; For stereo model "empiric+lpf", this sets the Q valu
   SNDH=13
   SPC=13
   VGM=13
+  VGMX=13
   UNKN=7
 
 [timidity]

@@ -70,6 +70,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 #include "types.h"
 
@@ -982,7 +983,7 @@ static short editmode=0;
 static unsigned int scanposf, scanposp;
 static int win = 0;
 
-int fsListScramble=1;
+int fsListScramble=1; /* shuffle play: 0 off, 1 on (one round), 2 endless (new rounds) */
 int fsListRemove=1;
 int fsLoopMods=1;
 int fsScanNames=1;
@@ -1003,8 +1004,52 @@ static struct ocpfile_t *autonext_file = 0; /* last file played from the browser
 static struct ocpdir_t  *autonext_dir  = 0; /* its directory, ref'd */
 static struct modlist   *autonext_list = 0; /* cached sorted listing of autonext_dir */
 
+/* shuffle play in a directory: files played so far, in order (the round is the part from
+ * autonext_round), so that each file plays once per round and "previous" goes back */
+static uint32_t *autonext_played = 0;
+static int autonext_played_n = 0, autonext_played_size = 0, autonext_round = 0;
+
+static void autonext_played_reset (void)
+{
+	autonext_played_n = 0;
+	autonext_round = 0;
+}
+
+static void autonext_played_add (uint32_t ref)
+{
+	if (autonext_played_n && (autonext_played[autonext_played_n - 1] == ref))
+	{
+		return;
+	}
+	if (autonext_played_n == autonext_played_size)
+	{
+		uint32_t *t = realloc (autonext_played, sizeof (uint32_t) * (autonext_played_size + 64));
+		if (!t)
+		{
+			return;
+		}
+		autonext_played = t;
+		autonext_played_size += 64;
+	}
+	autonext_played[autonext_played_n++] = ref;
+}
+
+static int autonext_played_in_round (uint32_t ref)
+{
+	int i;
+	for (i = autonext_round; i < autonext_played_n; i++)
+	{
+		if (autonext_played[i] == ref)
+		{
+			return 1;
+		}
+	}
+	return 0;
+}
+
 static void autonext_clear (void)
 {
+	autonext_played_reset ();
 	if (autonext_list)
 	{
 		modlist_free (autonext_list);
@@ -1037,6 +1082,7 @@ static void autonext_set (struct ocpfile_t *file)
 	autonext_file = file;
 	if (autonext_dir != file->parent)
 	{ /* new directory: drop the cached listing */
+		autonext_played_reset ();
 		if (autonext_list)
 		{
 			modlist_free (autonext_list);
@@ -1049,13 +1095,11 @@ static void autonext_set (struct ocpfile_t *file)
 		autonext_dir = file->parent;
 		autonext_dir->ref (autonext_dir);
 	}
+	autonext_played_add (file->dirdb_ref);
 }
 
-/* direction: +1 next, -1 previous, 0 the current file itself. Returns an entry inside autonext_list, or NULL */
-static struct modlistentry *autonext_pick (int direction)
+static int autonext_load_list (void)
 {
-	int i;
-
 	if (!autonext_file || !autonext_dir)
 	{
 		return 0;
@@ -1068,6 +1112,169 @@ static struct modlistentry *autonext_pick (int direction)
 		}
 		fsReadDir (autonext_list, autonext_dir, curmask, 0);
 		modlist_sort (autonext_list);
+	}
+	return 1;
+}
+
+/* shuffle play in a directory: a random file not played yet in this round; when the round
+ * is over, a new one starts (endless) or there is nothing left (on). With commit=0, only
+ * tells if there is a next file. */
+static struct modlistentry *autonext_shuffle_pick (int commit)
+{
+	unsigned int i;
+	int count = 0, total = 0, n;
+	if (!autonext_load_list ())
+	{
+		return 0;
+	}
+	for (i = 0; i < autonext_list->num; i++)
+	{
+		struct modlistentry *m = modlist_get (autonext_list, i);
+		if (m->file && (m->flags & MODLIST_FLAG_ISMOD))
+		{
+			total++;
+			if ((m->file->dirdb_ref != autonext_file->dirdb_ref) && !autonext_played_in_round (m->file->dirdb_ref))
+			{
+				count++;
+			}
+		}
+	}
+	if (!count)
+	{
+		if ((fsListScramble != 2) || !total)
+		{
+			return 0;
+		}
+		/* new round; the file just played does not start it, unless it is the only one */
+		if (commit)
+		{
+			autonext_round = autonext_played_n;
+		}
+		count = (total > 1) ? total - 1 : 1;
+		if (!commit)
+		{
+			return modlist_get (autonext_list, 0); /* non-zero: there is a next file */
+		}
+		n = rand () % count;
+		for (i = 0; i < autonext_list->num; i++)
+		{
+			struct modlistentry *m = modlist_get (autonext_list, i);
+			if (m->file && (m->flags & MODLIST_FLAG_ISMOD) && ((total == 1) || (m->file->dirdb_ref != autonext_file->dirdb_ref)))
+			{
+				if (!n--)
+				{
+					return m;
+				}
+			}
+		}
+		return 0;
+	}
+	if (!commit)
+	{
+		return modlist_get (autonext_list, 0);
+	}
+	n = rand () % count;
+	for (i = 0; i < autonext_list->num; i++)
+	{
+		struct modlistentry *m = modlist_get (autonext_list, i);
+		if (m->file && (m->flags & MODLIST_FLAG_ISMOD) &&
+		    (m->file->dirdb_ref != autonext_file->dirdb_ref) && !autonext_played_in_round (m->file->dirdb_ref))
+		{
+			if (!n--)
+			{
+				return m;
+			}
+		}
+	}
+	return 0;
+}
+
+/* shuffle play in a directory: the file played before the current one, or 0 */
+static struct modlistentry *autonext_shuffle_back (void)
+{
+	int i;
+	if ((autonext_played_n < 2) || !autonext_load_list ())
+	{
+		return 0;
+	}
+	i = modlist_find (autonext_list, autonext_played[autonext_played_n - 2]);
+	if (i < 0)
+	{
+		return 0;
+	}
+	autonext_played_n--; /* the current file can come again in this round */
+	if (autonext_round > autonext_played_n - 1)
+	{
+		autonext_round = autonext_played_n - 1;
+	}
+	return modlist_get (autonext_list, i);
+}
+
+/* playlist shuffle in rounds (when played files stay in the playlist): index of a random
+ * entry not played in this round, or -1 */
+static int playlist_round_pick (int commit, int lastplayed)
+{
+	unsigned int i;
+	int count = 0, n;
+	for (i = 0; i < playlist->num; i++)
+	{
+		if (!(modlist_get (playlist, i)->flags & MODLIST_FLAG_PLAYED))
+		{
+			count++;
+		}
+	}
+	if (!count)
+	{
+		if ((fsListScramble != 2) || !playlist->num)
+		{
+			return -1;
+		}
+		if (!commit)
+		{
+			return 0;
+		}
+		for (i = 0; i < playlist->num; i++)
+		{
+			modlist_get (playlist, i)->flags &= ~MODLIST_FLAG_PLAYED;
+		}
+		if ((playlist->num > 1) && (lastplayed >= 0) && (lastplayed < (int)playlist->num))
+		{ /* do not start the new round with the file just played */
+			n = rand () % (playlist->num - 1);
+			return (n >= lastplayed) ? n + 1 : n;
+		}
+		return rand () % playlist->num;
+	}
+	if (!commit)
+	{
+		return 0;
+	}
+	n = rand () % count;
+	for (i = 0; i < playlist->num; i++)
+	{
+		if (!(modlist_get (playlist, i)->flags & MODLIST_FLAG_PLAYED) && !n--)
+		{
+			return i;
+		}
+	}
+	return -1;
+}
+
+/* shuffle with played entries removed from the playlist (the original OCP behaviour) */
+static int playlist_shuffle_removes (void)
+{
+	return fsListRemove && (fsListScramble == 1);
+}
+
+static int playlist_last_played = -1;
+
+/* direction: +1 next, -1 previous, 0 the current file itself. Returns an entry inside autonext_list, or NULL */
+static struct modlistentry *autonext_pick (int direction)
+{
+	int i;
+
+	if (!autonext_load_list ())
+	{
+		return 0;
 	}
 	i = modlist_find (autonext_list, autonext_file->dirdb_ref);
 	if (i < 0)
@@ -1091,7 +1298,19 @@ static struct modlistentry *autonext_pick (int direction)
 
 int fsFilesLeft(void)
 {
-	return (isnextplay!=NextPlayNone)||playlist->num||(autonext_pick(1)!=0);
+	if (isnextplay != NextPlayNone)
+	{
+		return 1;
+	}
+	if (playlist->num)
+	{
+		if (fsListScramble && !playlist_shuffle_removes ())
+		{
+			return playlist_round_pick (0, playlist_last_played) >= 0;
+		}
+		return 1;
+	}
+	return (fsListScramble ? autonext_shuffle_pick (0) : autonext_pick (1)) != 0;
 }
 
 /* returns zero if fsReadDir() fails */
@@ -1201,7 +1420,13 @@ int fsGetPrevFile (struct moduleinfostruct *info, struct ocpfilehandle_t **fileh
 			{
 				struct ocpfile_t *f;
 				/* autonext: previous playable file in the directory, or restart the first one */
-				if (!(m = autonext_pick (-1)) && !(m = autonext_pick (0)))
+				if (fsListScramble)
+				{
+					m = autonext_shuffle_back ();
+				} else {
+					m = autonext_pick (-1);
+				}
+				if (!m && !(m = autonext_pick (0)))
 				{
 					return retval;
 				}
@@ -1282,7 +1507,7 @@ int fsGetPrevFile (struct moduleinfostruct *info, struct ocpfilehandle_t **fileh
 	}
 
 //errorout:
-	if (fsListRemove)
+	if (fsListRemove && (fsListScramble != 2))
 	{
 		modlist_remove(playlist, pick);
 	}
@@ -1312,12 +1537,22 @@ int fsGetNextFile (struct moduleinfostruct *info, struct ocpfilehandle_t **fileh
 			}
 			autonext_clear ();
 			pick = playlist->pos;
+			if (fsListScramble && !playlist_shuffle_removes () && (playlist_round_pick (0, -1) < 0))
+			{ /* the last round is over: started again by hand, begin a new one */
+				unsigned int i;
+				for (i = 0; i < playlist->num; i++)
+				{
+					modlist_get (playlist, i)->flags &= ~MODLIST_FLAG_PLAYED;
+				}
+			}
 			m = modlist_get (playlist, pick);
+			m->flags |= MODLIST_FLAG_PLAYED;
+			playlist_last_played = pick;
 			break;
 		case NextPlayNone:
 			if (!playlist->num)
 			{
-				if ((m = autonext_pick (1)))
+				if ((m = fsListScramble ? autonext_shuffle_pick (1) : autonext_pick (1)))
 				{
 					autonext_next = m->file;
 					break;
@@ -1326,11 +1561,21 @@ int fsGetNextFile (struct moduleinfostruct *info, struct ocpfilehandle_t **fileh
 				return retval;
 			}
 			autonext_clear ();
-			if (fsListScramble)
+			if (fsListScramble && !playlist_shuffle_removes ())
+			{
+				int p = playlist_round_pick (1, playlist_last_played);
+				if (p < 0)
+				{
+					return retval;
+				}
+				pick = p;
+			} else if (fsListScramble)
 				pick = rand() % playlist->num;
 			else
 				pick = playlist->pos;
 			m=modlist_get (playlist, pick);
+			m->flags |= MODLIST_FLAG_PLAYED;
+			playlist_last_played = pick;
 			break;
 		default:
 			fprintf(stderr, "BUG in pfilesel.c: fsGetNextFile() Invalid isnextplay\n");
@@ -1386,9 +1631,10 @@ int fsGetNextFile (struct moduleinfostruct *info, struct ocpfilehandle_t **fileh
 			isnextplay = NextPlayNone;
 			/* and then run the same as bellow :-p */
 		case NextPlayNone:
-			if (fsListRemove)
+			if (fsListRemove && (fsListScramble != 2))
 			{
 				modlist_remove(playlist, pick);
+				playlist_last_played = -1;
 			} else {
 				if (!fsListScramble)
 					if ( (pick=playlist->pos+1)>=playlist->num)
@@ -1454,12 +1700,30 @@ int fsPreInit (const struct configAPI_t *configAPI)
 	fsScanNames    =  configAPI->GetProfileBool2  (sec,                  "fileselector",  "scanmodinfo",  1, 1);
 	fsScanArcs     =  configAPI->GetProfileBool2  (sec,                  "fileselector",  "scanarchives", 1, 1);
 	fsListRemove   =  configAPI->GetProfileBool2  (sec,                  "fileselector",  "playonce",     1, 1);
-	fsListScramble =  configAPI->GetProfileBool2  (sec,                  "fileselector",  "randomplay",   1, 1);
+	{
+		const char *r = configAPI->GetProfileString2 (sec, "fileselector", "randomplay", "off");
+		if (!strcasecmp (r, "endless"))
+		{
+			fsListScramble = 2;
+		} else {
+			fsListScramble = configAPI->GetProfileBool2 (sec, "fileselector", "randomplay", 0, 0) ? 1 : 0;
+		}
+	}
+	srand ((unsigned int)time (0));
 	fsPutArcs      =  configAPI->GetProfileBool2  (sec,                  "fileselector",  "putarchives",  1, 1);
 	fsLoopMods     =  configAPI->GetProfileBool2  (sec,                  "fileselector",  "loop",         1, 1);
 	fsAutoNext     =  configAPI->GetProfileBool2  (sec,                  "fileselector",  "autonext",     1, 1);
 	fsListRemove   =  configAPI->GetProfileBool   (                      "commandline_f", "r",            fsListRemove, 0);
-	fsListScramble = !configAPI->GetProfileBool   (                      "commandline_f", "o",           !fsListScramble, 1);
+	{
+		int o = configAPI->GetProfileBool ("commandline_f", "o", -1, 1); /* -fo1 = keep the order, -fo0 = shuffle */
+		if (o == 1)
+		{
+			fsListScramble = 0;
+		} else if ((o == 0) && !fsListScramble)
+		{
+			fsListScramble = 1;
+		}
+	}
 	fsLoopMods     =  configAPI->GetProfileBool   (                      "commandline_f", "l",            fsLoopMods, 0);
 	fsPlaylistOnly =!!configAPI->GetProfileString (                      "commandline",   "p",            0);
 	fsShowAllFiles =  configAPI->GetProfileBool2  (sec,                  "fileselector",  "showallfiles", 0, 0);
@@ -3203,7 +3467,7 @@ superbreak:
 		make_title("file selector setup", 0);
 
 		display_nprintf ( 1, 0, 0x07, plScrWidth, "1:  screen mode: %.15o%s",                              modename);
-		display_nprintf ( 2, 0, 0x07, plScrWidth, "2:  scramble module list order: %.15o%s",               fsListScramble?"on":"off");
+		display_nprintf ( 2, 0, 0x07, plScrWidth, "2:  shuffle play (scramble order): %.15o%s",            (fsListScramble == 2) ? "endless" : fsListScramble ? "on" : "off");
 		display_nprintf ( 3, 0, 0x07, plScrWidth, "3:  remove modules from playlist when played: %.15o%s", fsListRemove?"on":"off");
 		display_nprintf ( 4, 0, 0x07, plScrWidth, "4:  loop modules: %.15o%s",                             fsLoopMods?"on":"off");
 		display_nprintf ( 5, 0, 0x07, plScrWidth, "5:  scan module informatin: %.15o%s",                   fsScanNames?"on":"off");
@@ -3256,7 +3520,7 @@ superbreak:
 			                      plScrType = Console.CurrentMode;
 			                      break;
 			/*case '1': stored = 0; plScrType=(plScrType+1)&7; break;*/
-			case '2': stored = 0; fsListScramble=!fsListScramble; break;
+			case '2': stored = 0; fsListScramble = (fsListScramble + 1) % 3; break;
 			case '3': stored = 0; fsListRemove=!fsListRemove; break;
 			case '4': stored = 0; fsLoopMods=!fsLoopMods; break;
 			case '5': stored = 0; fsScanNames=!fsScanNames; break;
@@ -3307,7 +3571,7 @@ superbreak:
 				const char *sec=cfGetProfileString(cfConfigSec, "fileselsec", "fileselector");
 
 				cfSetProfileInt(cfScreenSec, "screentype", plScrType, 10);
-				cfSetProfileBool(sec, "randomplay", fsListScramble);
+				cfSetProfileString(sec, "randomplay", (fsListScramble == 2) ? "endless" : fsListScramble ? "on" : "off");
 				cfSetProfileBool(sec, "playonce", fsListRemove);
 				cfSetProfileBool(sec, "loop", fsLoopMods);
 				cfSetProfileBool(sec, "scanmodinfo", fsScanNames);

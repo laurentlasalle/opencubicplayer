@@ -12,6 +12,7 @@
 #include <vector>
 #include <vgm/player/playera.hpp>
 #include <vgm/player/s98player.hpp>
+#include <vgm/player/vgmplayer.hpp>
 #include <vgm/utils/DataLoader.h>
 #include <vgm/utils/MemoryLoader.h>
 #include <vgm/emu/SoundEmu.h>
@@ -41,6 +42,7 @@ extern "C" struct s98lib_t *s98lib_open (const uint8_t *data, uint32_t len, uint
 	}
 	memcpy (s->data, data, len);
 
+	s->player.RegisterPlayerEngine (new VGMPlayer);
 	s->player.RegisterPlayerEngine (new S98Player);
 	if (s->player.SetOutputSettings (rate, 2, 16, buflen))
 	{
@@ -91,7 +93,7 @@ extern "C" void s98lib_close (struct s98lib_t *s)
 	}
 	s->player.Stop ();
 	s->player.UnloadFile ();
-	s->player.UnregisterAllPlayers (); /* deletes the registered S98Player */
+	s->player.UnregisterAllPlayers (); /* deletes the registered players */
 	DataLoader_Deinit (s->loader);
 	free (s->data);
 	delete s;
