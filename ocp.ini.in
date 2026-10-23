@@ -88,7 +88,7 @@
   scaninarcs=on
   scanmodinfo=on
   scanarchives=on
-  putarchives=on
+  putarchives=off         ; on: the contents of archives (ZIP...) are also listed under them; off: archives are folders to enter
   playonce=on
   randomplay=off          ; shuffle play: off, on (each file once, in random order) or endless (new shuffled rounds)
   loop=off

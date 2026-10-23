@@ -177,6 +177,8 @@ Omni v9 (3.5.0-omni.9)
  - VGZ files are shown as plain files (no longer as a directory holding a
    .vgm): Enter plays them, and the automatic advance goes through them
  - S98 files in yellow in the file browser
+ - ZIP and other archives are shown as folders to enter by default
+   (putarchives=off; ALT-C item C, renamed "list archive contents inline")
 Omni v8 (3.5.0-omni.8, 2026-10-20)
  - Tracker view: the upcoming rows are filled in advance (a second, silent
    emulator runs a few seconds ahead of the audio)

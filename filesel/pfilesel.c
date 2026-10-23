@@ -1710,7 +1710,7 @@ int fsPreInit (const struct configAPI_t *configAPI)
 		}
 	}
 	srand ((unsigned int)time (0));
-	fsPutArcs      =  configAPI->GetProfileBool2  (sec,                  "fileselector",  "putarchives",  1, 1);
+	fsPutArcs      =  configAPI->GetProfileBool2  (sec,                  "fileselector",  "putarchives",  0, 0);
 	fsLoopMods     =  configAPI->GetProfileBool2  (sec,                  "fileselector",  "loop",         1, 1);
 	fsAutoNext     =  configAPI->GetProfileBool2  (sec,                  "fileselector",  "autonext",     1, 1);
 	fsListRemove   =  configAPI->GetProfileBool   (                      "commandline_f", "r",            fsListRemove, 0);
@@ -3477,7 +3477,7 @@ superbreak:
 		display_nprintf ( 9, 0, 0x07, plScrWidth, "9:  edit window: %.15o%s",                              fsEditWin?"on":"off");
 		display_nprintf (10, 0, 0x07, plScrWidth, "A:  module type colors: %.15o%s",                       fsColorTypes?"on":"off");
 		display_nprintf (11, 0, 0x07, plScrWidth, "B:  module information display mode: %.15o%s",          fsInfoModes[fsInfoMode]);
-		display_nprintf (12, 0, 0x07, plScrWidth, "C:  put archives: %.15o%s",                             fsPutArcs?"on":"off");
+		display_nprintf (12, 0, 0x07, plScrWidth, "C:  list archive contents inline (put archives): %.15o%s", fsPutArcs?"on":"off");
 		display_nprintf (13, 0, 0x07, plScrWidth, "D:  show all files: %.15o%s",                           fsShowAllFiles?"on":"off");
 		display_nprintf (14, 0, 0x07, plScrWidth, "E:  file-extensions to scan");
 		display_nprintf (15, 0, 0x07, plScrWidth, "F:  start directory: %.15o%s", (!fsStartPath || !fsStartPath[0]) ? "(Music folder)" : strcmp (fsStartPath, ".") ? fsStartPath : "(where OCP is started)");
