@@ -8,7 +8,7 @@ comma:=,
 # (-I<prefix>/include) and LDFLAGS (-L<prefix>/lib)
 MGBA_LIBS?=-lmgba
 ifeq ($(WINDOWS),1)
-MGBA_LIBS+=-lws2_32 -lshlwapi
+MGBA_LIBS+=-lws2_32 -lshlwapi -lole32 -luuid # sockets, paths, CoTaskMemFree, FOLDERID_* (mGBA platform code)
 endif
 ifneq ($(findstring darwin,$(host)),)
 MGBA_LIBS+=-framework Foundation
