@@ -3,7 +3,14 @@ name: Windows x64 build
 on:
   release:
     types: [published]    # publish a release (tag v<upstream>-omni.<n>) on GitHub to build and attach the zip
+  push:
+    branches: [dev]       # test builds of the dev branch (suffix set in VERSION_SUFFIX below)
   workflow_dispatch:      # manual build, zip available as an artifact
+    inputs:
+      suffix:
+        description: 'Version suffix for test builds, e.g. -test1 (empty for a release)'
+        required: false
+        default: ''
 
 jobs:
   build:
@@ -12,6 +19,7 @@ jobs:
       contents: write
     env:
       WORK: ${{ github.workspace }}/.work   # absolute path without "..", required by upload-artifact
+      VERSION_SUFFIX: ${{ github.event_name == 'push' && '-test1' || github.event.inputs.suffix }}
     steps:
       - uses: actions/checkout@v4
         with:

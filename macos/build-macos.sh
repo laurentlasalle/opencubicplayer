@@ -24,6 +24,7 @@ export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-15.0}
 GME_REPO=$(sed -n 's/^GME_REPO=\${GME_REPO:-\([^}]*\)}.*/\1/p' $OCP_SRC/windows/config.sh)
 GME_REF=$(sed -n 's/^GME_REF=\${GME_REF:-\([0-9a-f]*\)}.*/\1/p' $OCP_SRC/windows/config.sh)
 LIBVGM_REF=$(sed -n 's/^clone_commit https:\/\/github.com\/ValleyBell\/libvgm \([0-9a-f]*\) .*/\1/p' $OCP_SRC/windows/fetch-sources.sh)
+MGBA_TAG=$(sed -n 's/^clone https:\/\/github.com\/mgba-emu\/mgba \([0-9.]*\) .*/\1/p' $OCP_SRC/windows/fetch-sources.sh)
 
 # <upstream OCP version>-omni.<Omni release>, e.g. 3.5.0-omni.8
 VERSION=$(sed -n 's/^PACKAGE_VERSION=.\([0-9.]*\).$/\1/p' $OCP_SRC/configure)-omni.$(sed -n 's/^#define OMNI_VERSION \([0-9]*\)$/\1/p' $OCP_SRC/omni-version.h)$VERSION_SUFFIX
@@ -46,6 +47,7 @@ clone_commit () { # repo commit dir
 mkdir -p $SRC $BUILD $DIST
 clone_commit "$GME_REPO" "$GME_REF" game-music-emu
 clone_commit https://github.com/ValleyBell/libvgm "$LIBVGM_REF" libvgm
+test -d "$SRC/mgba" || git clone -q --depth 1 --branch "$MGBA_TAG" https://github.com/mgba-emu/mgba "$SRC/mgba"
 
 step "game-music-emu (fork with the visualisation API)"
 if ! test -f $PREFIX/.gme-$GME_REF; then
@@ -69,6 +71,21 @@ if ! test -f $PREFIX/.libvgm-$LIBVGM_REF; then
 		-DCMAKE_POLICY_VERSION_MINIMUM=3.5 > $BUILD/libvgm.log 2>&1 || { tail -40 $BUILD/libvgm.log; exit 1; }
 	make -C $BUILD/libvgm -j$J install >> $BUILD/libvgm.log 2>&1 || { tail -60 $BUILD/libvgm.log; exit 1; }
 	touch $PREFIX/.libvgm-$LIBVGM_REF
+fi
+
+step "mGBA (static, only the Game Boy Advance core, linked into the GSF plugin)"
+if ! test -f $PREFIX/.mgba-$MGBA_TAG; then
+	rm -rf $BUILD/mgba
+	cmake -S $SRC/mgba -B $BUILD/mgba -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX \
+		-DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+		-DBUILD_STATIC=ON -DBUILD_SHARED=OFF -DBUILD_QT=OFF -DBUILD_SDL=OFF \
+		-DBUILD_GL=OFF -DBUILD_GLES2=OFF -DBUILD_GLES3=OFF -DUSE_EPOXY=OFF -DM_CORE_GB=OFF \
+		-DUSE_DEBUGGERS=OFF -DUSE_GDB_STUB=OFF -DUSE_EDITLINE=OFF -DUSE_FFMPEG=OFF -DUSE_ZLIB=OFF \
+		-DUSE_MINIZIP=OFF -DUSE_PNG=OFF -DUSE_LIBZIP=OFF -DUSE_SQLITE3=OFF -DUSE_ELF=OFF -DUSE_LUA=OFF \
+		-DUSE_LZMA=OFF -DUSE_DISCORD_RPC=OFF -DENABLE_SCRIPTING=OFF -DBUILD_LTO=OFF \
+		-DCMAKE_POSITION_INDEPENDENT_CODE=ON > $BUILD/mgba.log 2>&1 || { tail -40 $BUILD/mgba.log; exit 1; }
+	make -C $BUILD/mgba -j$J install >> $BUILD/mgba.log 2>&1 || { tail -60 $BUILD/mgba.log; exit 1; }
+	touch $PREFIX/.mgba-$MGBA_TAG
 fi
 
 step "Open Cubic Player"

@@ -175,4 +175,18 @@ if ! is_done vgm; then step libvgm
   make -C $b -j$J install >> $b.log 2>&1 || { tail -60 $b.log; exit 1; }
   done_mark vgm; fi
 
+# mGBA (static, only the Game Boy Advance core, linked into 95-playgsf.dll)
+if ! is_done mgba; then step mgba
+  b=$B/mgba-build; rm -rf $b
+  cmake -S $SRC/mgba -B $b -G"Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=$B/toolchain.cmake \
+    -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+    -DBUILD_STATIC=ON -DBUILD_SHARED=OFF -DBUILD_QT=OFF -DBUILD_SDL=OFF \
+    -DBUILD_GL=OFF -DBUILD_GLES2=OFF -DBUILD_GLES3=OFF -DUSE_EPOXY=OFF -DM_CORE_GB=OFF \
+    -DUSE_DEBUGGERS=OFF -DUSE_GDB_STUB=OFF -DUSE_EDITLINE=OFF -DUSE_FFMPEG=OFF -DUSE_ZLIB=OFF \
+    -DUSE_MINIZIP=OFF -DUSE_PNG=OFF -DUSE_LIBZIP=OFF -DUSE_SQLITE3=OFF -DUSE_ELF=OFF -DUSE_LUA=OFF \
+    -DUSE_LZMA=OFF -DUSE_DISCORD_RPC=OFF -DENABLE_SCRIPTING=OFF -DBUILD_LTO=OFF \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON > $b.log 2>&1 || { tail -40 $b.log; exit 1; }
+  make -C $b -j$J install >> $b.log 2>&1 || { tail -60 $b.log; exit 1; }
+  done_mark mgba; fi
+
 echo "all dependencies built in $PREFIX"

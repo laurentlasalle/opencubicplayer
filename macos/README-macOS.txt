@@ -40,6 +40,13 @@ Keyboard
 - F1 = help, Alt-K = list of the keys available on the current screen.
 - Cmd+Q, or Quit in the application menu, quits OCP.
 
+Formats added by Omni
+---------------------
+Besides the formats of Open Cubic Player, Omni plays S98 files (PC-88,
+PC-98, X1, X68000), VGM files for chips that Game Music Emu does not emulate,
+and GSF / MINIGSF files (Game Boy Advance, through mGBA). README-Windows.txt
+in the source repository describes them and the tracker view.
+
 Command line
 ------------
 The executable is "Open Cubic Player.app/Contents/MacOS/ocp". Started from the

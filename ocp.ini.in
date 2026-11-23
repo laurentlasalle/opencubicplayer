@@ -103,6 +103,7 @@
   trackerview=on          ; NSF/NSFe/HES/GBS/SPC/VGM/GYM, S98 and VGM for other chips (MSX...): tracker-like pattern view built from the sound chip registers
   rowframes=6             ; tracker view: frames (1/60 s) per row
 ; these settings can also be changed in setup:/gmeconfig.dev
+; defaultlength= and fade= also apply to GSF and MINIGSF files (Game Boy Advance, played through mGBA)
 
 [s98]                     ; S98 (PC-88/PC-98...) through libvgm
   loops=2                 ; times the loop section is played before fading out
@@ -254,6 +255,7 @@ lpf_Qpct=100              ; For stereo model "empiric+lpf", this sets the Q valu
   XM=3
   AY2=13
   GBS=13
+  GSF=13
   GYM=13
   HES=13
   KSS=13

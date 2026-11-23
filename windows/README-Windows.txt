@@ -1,12 +1,12 @@
-Open Cubic Player v3.5.0 - Omni v9 (unofficial Windows x64 build)
-==================================================================
+Open Cubic Player v3.5.0 - Omni v10 (unofficial Windows x64 build)
+===================================================================
 Omni is an unofficial build of Open Cubic Player by Stian Skjelstad
 (https://github.com/mywave82/opencubicplayer), based on its git master of
 2026-10-17 (version 3.5.0), with the extra features listed below.
 Source and releases: https://github.com/laurentlasalle/opencubicplayer
 Please report problems of this build there, not to the upstream project.
 
-Versions are named <upstream version>-omni.<release>, e.g. 3.5.0-omni.9.
+Versions are named <upstream version>-omni.<release>, e.g. 3.5.0-omni.10.
 
 Start: double-click ocp.exe (SDL3 window, no console window).
 Requires Windows 10 or 11, 64-bit.
@@ -155,6 +155,26 @@ The file gives its loop point: a looping track plays
 A track without a loop ends by itself. With OCP's loop mode (Ctrl+L), the
 track loops forever. Ctrl+Home restarts the track.
 
+GSF files (Game Boy Advance) - played by mGBA
+---------------------------------------------
+GSF and MINIGSF files are played by the new playgsf player, which runs the
+music program of the game in mGBA (Jeffrey Pfau), a Game Boy Advance
+emulator. A MINIGSF file holds one track and needs its GSFLIB library (named
+in the file), in the same directory or in the same ZIP archive; GSFLIB files
+are not listed in the file browser.
+Title, artist, game, year and length are read from the file. The track plays
+for the length given by the file, then fades out for the given fade time;
+without a length, the [gme] settings apply:
+    defaultlength=150   seconds when the file gives no length (0 = forever)
+    fade=8              seconds of fade-out when the file gives none
+With OCP's loop mode (Ctrl+L), the track plays forever. Ctrl+Home restarts
+the track. Keys 1 to 6 mute the sound channels of the console: 1 to 4 are
+the Game Boy channels (square 1, square 2, wave, noise), 5 and 6 the two
+digital channels (Direct Sound A and B). Key i shows the information view.
+There is no tracker view: most games mix all their instruments by
+themselves into the two digital channels, so the notes cannot be read from
+the sound chip.
+
 Unifont fonts (recommended)
 ---------------------------
 GNU Unifont is not included. OCP works without it, but characters outside
@@ -168,6 +188,8 @@ If ocp.exe reports that VCRUNTIME140.dll is missing, install the
 Release history
 ---------------
 Omni v1 to v6 were distributed as "3.5.1" to "3.5.6".
+Omni v10 (3.5.0-omni.10, in development)
+ - GSF and MINIGSF files (Game Boy Advance), played by mGBA
 Omni v9 (3.5.0-omni.9, 2026-10-23)
  - Shuffle play: off / on (each file once) / endless (new rounds), also for
    the automatic advance in a directory; random order no longer the same at
@@ -261,4 +283,8 @@ build-deps.sh, build-ocp.sh, package.sh). Changes to the upstream sources:
    registers once per frame
  - plays98/s98vis.c (new): S98 tracker view, reads the command stream ahead
    of libvgm; plays98 shares playgme/nsftrak.c and nsfvis.c
+ - playgsf/ (new): GSF player; mGBA 0.10.5 (Mozilla Public License 2.0),
+   built with only its Game Boy Advance core, is linked statically into
+   95-playgsf.dll. filesel/pfilesel.c: file extensions of up to 7
+   characters (MINIGSF)
 iconv is provided by win-iconv instead of GNU libiconv.

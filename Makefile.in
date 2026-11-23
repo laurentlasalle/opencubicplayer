@@ -21,6 +21,10 @@ endif
 ifeq ($(shell $(or $(PKG_CONFIG),pkg-config) --exists vgm-player vgm-emu vgm-utils && echo 1),1)
 SUBDIRS+=plays98
 endif
+# GSF player, needs the mGBA headers and static library (https://mgba.io) in the search paths of CFLAGS and LDFLAGS
+ifeq ($(shell printf '\043include <mgba/core/core.h>\n' | $(CC) -E -x c - > /dev/null 2>&1 && echo 1),1)
+SUBDIRS+=playgsf
+endif
 SUBDIRS+=playsid playwav playxm playym stuff
 SUBDIRS+=mingw
 

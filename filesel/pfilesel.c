@@ -562,7 +562,7 @@ uint8_t fsModTypeColor(struct moduletype modtype)
 }
 
 
-#define MAX_MODEXT_LENGTH 5
+#define MAX_MODEXT_LENGTH 7 /* MINIGSF */
 #define MODULEEXTENSION_FLAGS_FROM_PLUGIN 1
 #define MODULEEXTENSION_FLAGS_FROM_INI    2
 struct moduleextension
