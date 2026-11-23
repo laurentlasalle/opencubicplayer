@@ -47,10 +47,10 @@ jobs:
             echo "::error title=$(basename $f)::$(tail -n 40 "$f" | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
           done
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: ocp-macos-arm64
           path: ${{ steps.package.outputs.zip }}
+          archive: false  # the zip itself (named after the file), not a zip holding the zip
 
       - name: Publish release
         if: github.event_name == 'release'
