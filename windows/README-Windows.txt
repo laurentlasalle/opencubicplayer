@@ -12,7 +12,7 @@ Start: double-click ocp.exe (SDL3 window, no console window).
 Requires Windows 10 or 11, 64-bit.
 
 Keys: F1 opens the manual; Alt+K lists the keys available on the current
-screen (file browser, playback, tracker view...), always up to date; Alt+C
+screen (file browser, playback, tracker view), always up to date; Alt+C
 opens the basic setup.
 
 Log file (diagnostics)
@@ -48,7 +48,7 @@ Automatic advance to the next file of a directory ([fileselector])
 ------------------------------------------------------------------
 When a file started from the file browser (Enter in the left list) ends and
 the playlist is empty, OCP plays the next file of the same directory, in the
-displayed order, whatever its format (S3M, NSF, MOD...). After the last file
+displayed order, whatever its format (S3M, NSF, MOD and others). After the last file
 of the directory, OCP returns to the file browser.
 During playback, Enter skips to the next file of the directory.
     autonext=on    (off for the original behaviour)
@@ -67,15 +67,15 @@ Shuffle applies both to the automatic advance in a directory and to the
 playlist. In a directory, "previous" (Ctrl+Left / <) goes back to the file
 played before. In endless mode, played files stay in the playlist.
 
-Track length of NSF, GBS, KSS, VGM... (section [gme])
-----------------------------------------------------
+Track length of NSF, GBS, KSS, VGM and others (section [gme])
+------------------------------------------------------------
 An NSF file does not store the length of its tracks: without a limit they
 loop forever. Each track now plays for a given time, fades out, then the
 next track of the file starts (and the next file after the last track).
     defaultlength=150   seconds when the file gives no length (0 = forever)
-    loops=2             loop count when the file gives intro + loop (VGM...)
+    loops=2             loop count when the file gives intro + loop (VGM)
     fade=8              seconds of fade-out
-When the file provides a length (NSFe, SPC...), it is used.
+When the file provides a length (NSFe, SPC and others), it is used.
 The [gme] section can be added as is to the ocp.ini in %APPDATA%; otherwise
 these defaults apply. These settings can also be changed inside OCP: in the
 file browser, go to setup: and open gmeconfig.dev (arrows, Esc to save).
@@ -89,12 +89,12 @@ rebuilt from the sound chip registers, read 60 times per second (50 for PAL),
 and follows exactly what is heard. The rows below the current one are filled
 in advance.
  - The number/channel mapping is shown in the title of the view
-   (1:P1 2:P2 3:Tri 4:Noi 5:DMC ...).
+   (1:P1 2:P2 3:Tri 4:Noi 5:DMC and so on).
  - NSF: one column per channel: Pulse 1, Pulse 2, Triangle, Noise, DPCM,
    then the expansion chips (VRC6, VRC7, FDS, MMC5, N163, Sunsoft 5B).
    Instrument = pulse duty cycle, noise mode, VRC7 patch; volume 0-F.
  - HES: 6 channels (W1-W4, M1-M2). Instrument = waveform number, in order
-   of appearance (01, 02...); volume 00-1F. Channels 5-6 in noise mode:
+   of appearance (01, 02 and so on); volume 00-1F. Channels 5-6 in noise mode:
    "X-#". DDA mode (samples, drums): "***".
  - GBS: 4 channels (Sq1, Sq2, Wav, Noi). Instrument = duty cycle (squares),
    waveform number (Wav), short noise mode (01).
@@ -123,17 +123,17 @@ in advance.
    80 columns, OCP falls back to its usual layouts (channels scroll).
    Tab / PgUp / PgDn select another layout; Home returns to this one.
  - Keys 1 to 9 and 0: mute/unmute a channel; q and s as usual. (These keys
-   also work with the other GME formats: SPC, VGM..., one key per emulator
+   also work with the other GME formats (SPC, VGM and others), one key per emulator
    voice.)
     trackerview=on   off for the original display
     rowframes=6      frames per row (1 to 32); 3 = more detail, 12 = more compact
-The other formats (KSS, AY, SAP...) have no tracker view.
+The other formats (KSS, AY, SAP and others) have no tracker view.
 
-VGM files for other chips than the Sega ones (MSX, PC-98, arcade...)
+VGM files for other chips than the Sega ones (MSX, PC-98 and others)
 --------------------------------------------------------------------
 Game Music Emu only emulates the Sega chips (SN76489, YM2612, YM2413). VGM
 and VGZ files that use other chips (AY-3-8910, Konami SCC, YM2151, YM2203,
-YM2608, arcade PCM chips...) are now played by libvgm, like the S98 files,
+YM2608, PCM chips and others) are now played by libvgm, like the S98 files,
 and show the type "VGMX" in the file browser. Loops and fade follow the
 [gme] section. The tracker view shows the AY-3-8910 / YM2149, Konami SCC
 (5 channels, "SC1" to "SC5"), YM2151, YM2203, YM2608, YM2612, YM2413 and
@@ -146,7 +146,7 @@ S98 files (NEC PC-88/PC-98, Sharp X1/X68000) - section [s98]
 -----------------------------------------------------------
 Played by the new plays98 player, based on libvgm (Valley Bell), which
 emulates the Yamaha chips of these machines: YM2203 (OPN), YM2608 (OPNA)
-with its SSG part, YM2151 (OPM), YM2612, OPLL/OPL... and AY-3-8910/SN76489.
+with its SSG part, YM2151 (OPM), YM2612, OPLL/OPL and AY-3-8910/SN76489.
 Title, artist and game are read from the file (Shift-JIS or UTF-8), the
 length is shown in the file browser, the chips in the comment field.
 The file gives its loop point: a looping track plays
@@ -168,12 +168,58 @@ without a length, the [gme] settings apply:
     defaultlength=150   seconds when the file gives no length (0 = forever)
     fade=8              seconds of fade-out when the file gives none
 With OCP's loop mode (Ctrl+L), the track plays forever. Ctrl+Home restarts
-the track. Keys 1 to 6 mute the sound channels of the console: 1 to 4 are
-the Game Boy channels (square 1, square 2, wave, noise), 5 and 6 the two
-digital channels (Direct Sound A and B). Key i shows the information view.
-There is no tracker view: most games mix all their instruments by
-themselves into the two digital channels, so the notes cannot be read from
-the sound chip.
+the track. Key i shows the information view.
+Tracker view: most games mix all their instruments by themselves into the
+two digital channels of the console, so the notes cannot be read from the
+sound chip. They are read from the sound engine of the game instead, when it
+is MusicPlayer2000 (MP2K, also called "Sappy"), the engine of Nintendo's
+SDK used by most GBA games: a second, silent mGBA runs the game a few
+seconds ahead of the audio, as for the other tracker views. There is one
+column per track of the song (for a chord, its newest and loudest note),
+then the 4 Game Boy channels. Keys 1 to 0 mute the tracks, then the Game
+Boy channels. The tracker view follows [gme] trackerview=.
+A game that uses another sound engine has no tracker view; keys 1 to 6 then
+mute the sound channels of the console: 1 to 4 are the Game Boy channels
+(square 1, square 2, wave, noise), 5 and 6 the two digital channels (Direct
+Sound A and B).
+
+SID files (Commodore 64): end of the tune and PAL / NTSC (section [libsidplayfp])
+---------------------------------------------------------------------------------
+A SID tune plays forever. Omni ends it, in this order:
+ - at its length in the song length database of the High Voltage SID
+   Collection (HVSC): DOCUMENTS\Songlengths.md5 is found by itself when the
+   file is inside a copy of the HVSC, wherever it is stored; otherwise give
+   its path with songlengths=. The database knows a file by the MD5 of its
+   content, so a copy whose title, author or release text was edited is not
+   found;
+ - when the tune starts again by itself after a silence of at least one
+   second (loopdetect=on). The sound that follows the silence is compared
+   with the start of the tune and with the previous pass, a few seconds
+   ahead of what is heard: a silence inside the tune does not end it;
+ - after defaultlength= seconds (300 by default, 0 = forever).
+After a length, the tune fades out for fade= seconds (3 by default). With
+OCP's loop mode (Ctrl+L), the tune plays forever.
+Key h switches between PAL (50 Hz, Europe) and NTSC (60 Hz, America and
+Japan) for the file being played, and starts the current tune again: a tune
+written for the other standard plays too slow or too fast. The next files
+use the setting of ocp.ini again (defaultC64=, forceC64=).
+
+Volume normalization (section [sound])
+--------------------------------------
+Every file is played at about the same loudness, whatever its format
+(normalize=on, normalizetarget=-18 dBFS). The loudness is measured on the
+sound itself, without the silences and the quiet parts.
+ - A file never heard starts at its own volume. After 3 seconds of sound,
+   its gain glides to the one measured in 1.5 seconds, then stays fixed
+   until the end of the file.
+ - When the file stops after at least 10 seconds of sound, its loudness is
+   saved in CPLOUD.DAT, next to CPMODNFO.DAT in
+   %APPDATA%\OpenCubicPlayer\Data; the next time, its gain is right from
+   the start. The list grows as you listen.
+ - The gain goes from -12 to +12 dB; a boost never takes the loudest sample
+   measured above full scale. The files that hold several songs (NSF, SID
+   and others) get the loudness of the first song heard.
+Delete CPLOUD.DAT to measure everything again.
 
 Audio streams of games (GENH, ADX, BRSTM and others) - played by vgmstream
 ---------------------------------------------------------------------------
@@ -209,11 +255,21 @@ Omni v10 (3.5.0-omni.10, in development)
    formats), played by vgmstream
  - S98 and VGM files with a broken loop point no longer freeze OCP when
    they are opened
+ - GSF: tracker view for the games that use the MP2K sound engine (one
+   column per track of the song, then the Game Boy channels); keys 1 to 0
+   mute the tracks
+ - SID: end of the tune from the HVSC song length database, or when it
+   starts again after a silence, or after defaultlength=; fade-out after a
+   length
+ - SID: key h switches between PAL (50 Hz) and NTSC (60 Hz) for the file
+   being played
+ - Volume normalization: every file at about the same loudness, whatever
+   its format; the loudness of the files heard is kept in CPLOUD.DAT
 Omni v9 (3.5.0-omni.9, 2026-10-23)
  - Shuffle play: off / on (each file once) / endless (new rounds), also for
    the automatic advance in a directory; random order no longer the same at
    every start
- - VGM / VGZ files for MSX, PC-98, X68000, arcade... played by libvgm, with
+ - VGM / VGZ files for MSX, PC-98, X68000 and others played by libvgm, with
    the tracker view (new: Konami SCC)
  - VGZ files are shown as plain files (no longer as a directory holding a
    .vgm): Enter plays them, and the automatic advance goes through them
@@ -264,7 +320,7 @@ Omni v2 (2026-10-18)
 Omni v1 (2026-10-18)
  - HiDPI scaling: x2 on a 2160p screen, follows screen changes (sdlscale)
  - 80x30 mode by default (screentype=1), mode comments fixed
- - GME (NSF, GBS, KSS, VGM...): default length, loops and fade ([gme])
+ - GME (NSF, GBS, KSS, VGM and others): default length, loops and fade ([gme])
  - Keys < and >: fixed for the first and last track of a file
  - Automatic advance to the next file of a directory (autonext)
 3.5.0
@@ -293,7 +349,7 @@ build-deps.sh, build-ocp.sh, package.sh). Changes to the upstream sources:
    the GME tracker view
  - plays98/ (new): S98 player; libvgm is linked statically into
    95-plays98.dll. libvgm has no global license: each emulation core has
-   its own (MAME BSD/GPL, Nuked LGPL...). Check before redistributing.
+   its own (MAME BSD/GPL, Nuked LGPL and others). Check before redistributing.
  - ocp.ini: screentype=4 (128x48), autonext, [gme] and [s98] sections
  - omni-version.h (new): Omni release number, shown in the title bar;
    filesel/mdb.c rescans files of unknown type after an Omni update
@@ -306,6 +362,13 @@ build-deps.sh, build-ocp.sh, package.sh). Changes to the upstream sources:
    built with only its Game Boy Advance core, is linked statically into
    95-playgsf.dll. filesel/pfilesel.c: file extensions of up to 7
    characters (MINIGSF)
+ - playgsf/gsfvis.c (new): tracker view from the state of the MP2K sound
+   engine, read in a second mGBA; playgsf shares playgme/nsftrak.c and
+   nsfvis.c
+ - playsid/sidend.c, sidlength.c (new): end of the SID tunes (loop
+   detection, HVSC song lengths); key h (PAL / NTSC) in sidpplay.cpp
+ - cpiface/cpinorm.c (new): volume normalization of the sound sent to the
+   player device
  - playvgms/ (new): vgmstream player; vgmstream r2168 (ISC license), built
    without FFmpeg, mpg123 and Vorbis, is linked statically into
    95-playvgms.dll

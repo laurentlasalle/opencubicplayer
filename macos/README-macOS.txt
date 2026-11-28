@@ -21,7 +21,7 @@ Settings and files
 ------------------
 - Configuration: ~/.config/ocp/ocp.ini (created on the first start). If you have
   used another version of OCP before, delete or rename this file to get the
-  Omni defaults (128x48 window, tracker view settings...).
+  Omni defaults (128x48 window, tracker view settings and others).
 - The file selector starts in your Music folder; another start folder can be
   set in ALT-C (item F, TAB completes folder names, ALT-S saves).
 - The window opens where it was when OCP was last closed (centered the first
@@ -45,8 +45,12 @@ Formats added by Omni
 Besides the formats of Open Cubic Player, Omni plays S98 files (PC-88,
 PC-98, X1, X68000), VGM files for chips that Game Music Emu does not emulate,
 GSF / MINIGSF files (Game Boy Advance, through mGBA) and the audio streams of
-games (GENH, ADX, BRSTM and others, through vgmstream). README-Windows.txt
-in the source repository describes them and the tracker view.
+games (GENH, ADX, BRSTM and others, through vgmstream). It also ends SID
+tunes (HVSC song lengths, or when they start again after a silence), switches
+SID files between PAL and NTSC with key h, and plays every file at about the
+same loudness ([sound] normalize=; the loudness of the files heard is kept in
+~/.local/share/ocp/CPLOUD.DAT). README-Windows.txt in the source repository
+describes them and the tracker view.
 
 Command line
 ------------
