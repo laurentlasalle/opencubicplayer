@@ -265,7 +265,7 @@ If ocp.exe reports that VCRUNTIME140.dll is missing, install the
 Release history
 ---------------
 Omni v1 to v6 were distributed as "3.5.1" to "3.5.6".
-Omni v10 (3.5.0-omni.10, in development)
+Omni v10 (3.5.0-omni.10, 2026-11-28)
  - GSF and MINIGSF files (Game Boy Advance), played by mGBA
  - audio streams of games (GENH, ADX, BRSTM, HCA and hundreds of other
    formats), played by vgmstream
