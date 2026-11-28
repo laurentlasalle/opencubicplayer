@@ -330,7 +330,12 @@ static int sidProcessKey (struct cpifaceSessionAPI_t *cpifaceSession, uint16_t k
 			cpifaceSession->KeyHelp ('>', "Next track");
 			cpifaceSession->KeyHelp (KEY_CTRL_RIGHT, "Next track");
 			cpifaceSession->KeyHelp (KEY_CTRL_HOME, "Next to start of song");
+			cpifaceSession->KeyHelp ('h', "Switch between PAL (50 Hz) and NTSC (60 Hz), this file only");
 			return 0;
+		case 'h':
+			sidToggleVideoStandard ();
+			cpifaceSession->ResetSongTimer (cpifaceSession);
+			break;
 		case 'p': case 'P':
 			cpifaceSession->TogglePauseFade (cpifaceSession);
 			break;
@@ -366,9 +371,12 @@ static int sidProcessKey (struct cpifaceSessionAPI_t *cpifaceSession, uint16_t k
 }
 
 static int sidLooped (struct cpifaceSessionAPI_t *cpifaceSession, int LoopMod)
-{ /* We do not detect loops at the moment */
+{
+	sidSetLoop (LoopMod);
 	sidIdle (cpifaceSession);
-	return 0;
+	/* the end of the tune: its length (song length database or defaultlength=),
+	 * or a loop after a silence (see sidplay.cpp) */
+	return (!LoopMod) && sidIsEnded (cpifaceSession);
 }
 
 static int sidOpenFile (struct cpifaceSessionAPI_t *cpifaceSession, struct moduleinfostruct *info, struct ocpfilehandle_t *sidf)

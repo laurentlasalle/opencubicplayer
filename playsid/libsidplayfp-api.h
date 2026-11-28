@@ -45,6 +45,7 @@ namespace libsidplayfp
 		bool nexttrack (void) { return selecttrack (selected_track + 1); }
 		bool selecttrack (unsigned int track); // void sidpStartSong(char sng);
 		bool prevtrack (void) { return selecttrack (selected_track - 1); }
+		bool setVideoStandard (bool pal); /* forces a PAL or an NTSC C64 for this file, and starts the current track again */
 
 		/* targetBuffer:
 			Mixer left, right (interleaved)

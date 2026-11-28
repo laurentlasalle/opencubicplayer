@@ -535,6 +535,19 @@ namespace libsidplayfp
 	}
 
 
+	bool ConsolePlayer::setVideoStandard (bool pal)
+	{
+		if (m_state != playerRunning)
+		{
+			return false;
+		}
+		/* m_engCfg belongs to this player, which is made again for each file: the
+		 * next file uses the settings of ocp.ini again */
+		m_engCfg.defaultC64Model = pal ? SidConfig::PAL : SidConfig::NTSC;
+		m_engCfg.forceC64Model = true;
+		return open ();
+	}
+
 	uint_least32_t ConsolePlayer::iterateaudio (int16_t *targetBuffer, uint_least32_t count, uint_least32_t cycles, std::vector<int16_t *> *rawSamples)
 	{
 		if (m_state == playerRunning)

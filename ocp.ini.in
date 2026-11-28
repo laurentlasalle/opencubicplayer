@@ -168,6 +168,21 @@
   kernal=KERNAL.ROM
   basic=BASIC.ROM
   chargen=CHARGEN.ROM
+; A SID tune plays forever. Omni ends it, in this order:
+;  - at its length in the song length database of the High Voltage SID Collection
+;    (HVSC). The file DOCUMENTS/Songlengths.md5 is found by itself when the tune is
+;    inside a copy of the HVSC; otherwise give its path with songlengths=. A file
+;    whose title, author or release text was edited is not found in the database;
+;  - when it starts again after a silence of at least 1 second (loopdetect=on);
+;  - after defaultlength= seconds (0 plays forever).
+; A fade-out of fade= seconds is added after a length. Loop mode (Ctrl+L) plays
+; forever. Key h switches between PAL (50 Hz) and NTSC (60 Hz) for the file being
+; played, and starts the current tune again.
+; songlengths=C:\HVSC\C64Music\DOCUMENTS\Songlengths.md5
+  songlengths=
+  loopdetect=on
+  defaultlength=300
+  fade=3
 
 [adplug]
   emulator=nuked          ; Possible values are ken, nuked, satoh woody and retrowave.

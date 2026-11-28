@@ -65,6 +65,8 @@ extern "C"
 
 #include "sidplay.h"
 #include "libsidplayfp-api.h"
+#include "sidend.h"
+#include "sidlength.h"
 
 #define TARGET_ROW_BUFFERS 30 /* half a second, (if going 60 Herz), or 25 would be enough */
 #define MAX_ROW_BUFFERS (TARGET_ROW_BUFFERS * 8) /* If pitch<->speed == 800%, we need up to 8x the amount of data */
@@ -116,6 +118,33 @@ static int clipbusy=0;
 
 static uint8_t sidMuted[3*3];
 
+/* ---- end of the tune (Omni) ----
+ * A SID tune plays forever. It ends:
+ *  - at its length in the HVSC song length database (sidlength.h), with a fade-out;
+ *  - otherwise when it loops after a silence (sidend.h), at the start of the silence;
+ *  - otherwise after [libsidplayfp] defaultlength= seconds, with a fade-out.
+ * In OCP's loop mode (Ctrl+L) it plays forever. */
+struct frame_t
+{
+	int16_t *stereo;          /* stereo samples of one video frame */
+	int16_t *raw[3];          /* 4 channels per sample (output and 3 voices) for each SID chip */
+	unsigned int samples;
+	SidStatBuffer_t stat;     /* registers at the end of the frame */
+};
+static struct frame_t frames[SIDEND_COMPARE];   /* [0] is the frame being made; the frames kept aside while sidend compares */
+static int held;                                /* frames kept aside */
+static int flushing = -1;                       /* next frame kept aside to give to the ringbuffer, -1 if none */
+static unsigned int frame_capacity;             /* samples one frame can hold (PAL or NTSC) */
+static int sid_doloop;                          /* OCP loop mode */
+static int sid_ended;                           /* no more frames: the tune is over */
+static int sid_loopdetect;                      /* [libsidplayfp] loopdetect= */
+static int32_t sid_length_ms;                   /* -1: no length (forever, or until it loops) */
+static int32_t sid_fade_ms;
+static double sid_pos_ms;                       /* emulated time since the (sub)tune started */
+static char sid_md5[33];                        /* of the file, for the song length database */
+static struct ocpfilehandle_t *sid_file;
+static struct cpifaceSessionAPI_t *sid_session;
+
 #define PANPROC \
 do { \
 	float _rs = rs, _ls = ls; \
@@ -155,70 +184,205 @@ static void SidStatBuffers_callback_from_sidbuf (void *arg, int samples_ago)
 	SidStatBuffers_available++;
 }
 
-OCP_INTERNAL void sidIdler (struct cpifaceSessionAPI_t *cpifaceSession)
+static void free_frames (void)
 {
-	while (SidStatBuffers_available > 0) /* we only prepare more data if SidStatBuffers_available is non-zero. This gives about 0.5 seconds worth of sample-data */
+	int i, c;
+	for (i = 0; i < SIDEND_COMPARE; i++)
 	{
-		int i, j;
-
-		int pos1, pos2;
-		int length1, length2;
-		int fill1 = 0, fill2 = 0;
-
-		for (i=0; i < MAX_ROW_BUFFERS; i++)
+		delete[] frames[i].stereo; frames[i].stereo = NULL;
+		for (c = 0; c < 3; c++)
 		{
-			if (SidStatBuffers[i].in_use)
-			{
-				continue;
-			}
+			delete[] frames[i].raw[c]; frames[i].raw[c] = NULL;
+		}
+	}
+	held = 0;
+	flushing = -1;
+}
+
+/* emulates one video frame into f */
+static void render_frame (struct frame_t *f)
+{
+	int j;
+	std::vector<int16_t *> raw {f->raw[0], f->raw[1], f->raw[2]};
+	f->samples = mySidPlayer->iterateaudio (f->stereo, sid_samples_per_row, sid_clocks_per_row, &raw) >> 1;
+	for (j=0; j < SidCount; j++)
+	{
+		mySidPlayer->getSidStatus (j,
+		                           f->stat.registers[j],
+		                           f->stat.volumes[j][0],
+		                           f->stat.volumes[j][1],
+		                           f->stat.volumes[j][2]);
+	}
+
+	/* length of the tune: fade-out, then the end */
+	if (!sid_doloop && (sid_length_ms > 0) && (sid_pos_ms >= sid_length_ms))
+	{
+		unsigned int i;
+		double end = (double)sid_length_ms + sid_fade_ms;
+		for (i = 0; i < f->samples; i++)
+		{
+			double t = sid_pos_ms + i * 1000.0 / sidRate;
+			int32_t gain = (t >= end) ? 0 : (int32_t)((end - t) * 32768.0 / (sid_fade_ms ? sid_fade_ms : 1));
+			f->stereo[i * 2 + 0] = (int16_t)((f->stereo[i * 2 + 0] * gain) >> 15);
+			f->stereo[i * 2 + 1] = (int16_t)((f->stereo[i * 2 + 1] * gain) >> 15);
+		}
+		if (sid_pos_ms + f->samples * 1000.0 / sidRate >= end)
+		{
+			sid_ended = 1;
+		}
+	}
+	sid_pos_ms += f->samples * 1000.0 / sidRate;
+}
+
+/* gives one frame to the ringbuffer, with its registers for the display; returns 0
+ * if there is no room for it yet */
+static int commit_frame (struct cpifaceSessionAPI_t *cpifaceSession, const struct frame_t *f)
+{
+	int pos1, pos2, length1, length2, i, c;
+	unsigned int n1;
+
+	cpifaceSession->ringbufferAPI->get_head_samples (sid_buf_pos, &pos1, &length1, &pos2, &length2);
+	if ((unsigned int)(length1 + length2) < f->samples)
+	{
+		return 0;
+	}
+	for (i=0; i < MAX_ROW_BUFFERS; i++)
+	{
+		if (!SidStatBuffers[i].in_use)
+		{
 			break;
 		}
-		assert (i != MAX_ROW_BUFFERS);
-
-		cpifaceSession->ringbufferAPI->get_head_samples (sid_buf_pos, &pos1, &length1, &pos2, &length2);
-
-		/* We can fit length1+length2 samples into out devp-mirrored buffer */
-
-		if ((length1 + length2) < sid_samples_per_row)
-		{
-			break; /* can only happen if speed is over 800% ... */
-		}
-
-		std::vector<int16_t *> raw1 {sid_buf_4x3[0] + (pos1<<2),
-		                             sid_buf_4x3[1] + (pos1<<2),
-		                             sid_buf_4x3[2] + (pos1<<2)};
-
-		/* ringbuffer can physically fit one sid_samples_per_row overflow, so we can manually wrap it back when iterateaudio() writes more data than length1 could fit */
-		fill1 = mySidPlayer->iterateaudio (sid_buf_stereo + (pos1 << 1), sid_samples_per_row, sid_clocks_per_row, &raw1) >> 1;
-		if (fill1 > length1)
-		{
-			fill2 = fill1 - length1;
-			fill1 = length1;
-			memcpy (sid_buf_stereo + (pos2 << 1), sid_buf_stereo + ((pos1 + fill1) << 1), fill2 * 2 * sizeof (int16_t));
-			memcpy (sid_buf_4x3[0] + (pos2 << 2), sid_buf_4x3[0] + ((pos1 + fill1) << 2), fill2 * 4 * sizeof (int16_t));
-			memcpy (sid_buf_4x3[1] + (pos2 << 2), sid_buf_4x3[1] + ((pos1 + fill1) << 2), fill2 * 4 * sizeof (int16_t));
-			memcpy (sid_buf_4x3[2] + (pos2 << 2), sid_buf_4x3[2] + ((pos1 + fill1) << 2), fill2 * 4 * sizeof (int16_t));
-		}
-		for (j=0; j < SidCount; j++)
-		{
-			uint8_t registers[32];
-			mySidPlayer->getSidStatus (j,
-			                           registers,
-			                           SidStatBuffers[i].volumes[j][0],
-			                           SidStatBuffers[i].volumes[j][1],
-			                           SidStatBuffers[i].volumes[j][2]);
-			memcpy (SidStatBuffers[i].registers[j], registers, 0x20);
-		}
-
-		SidStatBuffers[i].in_use = 1;
-		cpifaceSession->ringbufferAPI->add_tail_callback_samples (sid_buf_pos, 0, SidStatBuffers_callback_from_sidbuf, SidStatBuffers + i);
-
-		/* Adding sid_samples_per_row to our devp-mirrored buffer */
-
-		cpifaceSession->ringbufferAPI->head_add_samples (sid_buf_pos, fill1 + fill2);
-
-		SidStatBuffers_available--;
 	}
+	if (i == MAX_ROW_BUFFERS)
+	{
+		return 0;
+	}
+
+	n1 = ((unsigned int)length1 < f->samples) ? (unsigned int)length1 : f->samples;
+	memcpy (sid_buf_stereo + (pos1 << 1), f->stereo, n1 * 2 * sizeof (int16_t));
+	memcpy (sid_buf_stereo + (pos2 << 1), f->stereo + n1 * 2, (f->samples - n1) * 2 * sizeof (int16_t));
+	for (c=0; c < 3; c++)
+	{
+		memcpy (sid_buf_4x3[c] + (pos1 << 2), f->raw[c], n1 * 4 * sizeof (int16_t));
+		memcpy (sid_buf_4x3[c] + (pos2 << 2), f->raw[c] + n1 * 4, (f->samples - n1) * 4 * sizeof (int16_t));
+	}
+
+	SidStatBuffers[i] = f->stat;
+	SidStatBuffers[i].in_use = 1;
+	cpifaceSession->ringbufferAPI->add_tail_callback_samples (sid_buf_pos, 0, SidStatBuffers_callback_from_sidbuf, SidStatBuffers + i);
+	cpifaceSession->ringbufferAPI->head_add_samples (sid_buf_pos, f->samples);
+	SidStatBuffers_available--;
+	return 1;
+}
+
+OCP_INTERNAL void sidIdler (struct cpifaceSessionAPI_t *cpifaceSession)
+{
+	while (1)
+	{
+		struct frame_t *f;
+		enum sidend_action_t action;
+
+		if (held && (flushing < 0) && (!sid_loopdetect || sid_doloop))
+		{ /* the loop mode was turned on while frames were kept aside: play them */
+			flushing = 0;
+		}
+		if (flushing >= 0)
+		{ /* the frames kept aside after a silence that was part of the tune */
+			if ((SidStatBuffers_available <= 0) || !commit_frame (cpifaceSession, frames + flushing))
+			{
+				break;
+			}
+			if (++flushing == held)
+			{
+				flushing = -1;
+				held = 0;
+			}
+			continue;
+		}
+		if (sid_ended)
+		{
+			break;
+		}
+		/* about 0.5 s of sound is prepared ahead (SidStatBuffers_available); while
+		 * sidend compares, the emulation goes on until it knows the answer */
+		if (!held && (SidStatBuffers_available <= 0))
+		{
+			break;
+		}
+
+		f = frames + held;
+		render_frame (f);
+
+		action = (sid_loopdetect && !sid_doloop) ? sidend_frame (f->stereo, f->samples, f->stat.registers) : SIDEND_PLAY;
+		switch (action)
+		{
+			case SIDEND_PLAY:
+				if (!commit_frame (cpifaceSession, f))
+				{ /* no room (speed far above 100%): the frame is kept for the next call */
+					held = 1;
+					flushing = 0;
+					return;
+				}
+				break;
+			case SIDEND_HOLD:
+				held++;
+				break;
+			case SIDEND_FLUSH:
+				held++;
+				flushing = 0;
+				break;
+			case SIDEND_RESTARTED:
+				held = 0;
+				sid_ended = 1;
+				cpifaceSession->cpiDebug (cpifaceSession, "[SID] the tune loops: end at %.1f s\n", (sid_pos_ms - SIDEND_COMPARE * 1000.0 * sid_clocks_per_row / mySidPlayer->getMainCpuSpeed ()) / 1000.0);
+				break;
+		}
+	}
+}
+
+/* a (sub)tune starts: its length, and the end detection */
+static void sid_track_start (void)
+{
+	int song = mySidTuneInfo->currentSong();
+	int defaultlength, fade;
+	const struct configAPI_t *cfg = sid_session->configAPI;
+
+	held = 0;
+	flushing = -1;
+	sid_ended = 0;
+	sid_pos_ms = 0.0;
+	sidend_reset (SidCount);
+
+	defaultlength = cfg->GetProfileInt ("libsidplayfp", "defaultlength", 300, 10);
+	fade = cfg->GetProfileInt ("libsidplayfp", "fade", 3, 10);
+	if (defaultlength < 0) defaultlength = 0;
+	if (fade < 0) fade = 0;
+	if (fade > 60) fade = 60;
+	sid_fade_ms = fade * 1000;
+	sid_length_ms = sidlength_lookup (sid_session, sid_file, sid_md5, song);
+	if (sid_length_ms > 0)
+	{
+		sid_session->cpiDebug (sid_session, "[SID] song %d: %d.%03d s (song length database)\n", song, sid_length_ms / 1000, sid_length_ms % 1000);
+	} else {
+		sid_length_ms = defaultlength ? defaultlength * 1000 : -1;
+	}
+}
+
+OCP_INTERNAL void sidSetLoop (int loop)
+{
+	sid_doloop = loop;
+}
+
+OCP_INTERNAL int sidIsEnded (struct cpifaceSessionAPI_t *cpifaceSession)
+{
+	/* the resampler (speed or pitch other than 100%) keeps the last 3 samples to
+	 * interpolate with, and up to 256 at high speeds: those are never played */
+	return sid_ended && (flushing < 0) && (cpifaceSession->ringbufferAPI->get_processing_available_samples (sid_buf_pos) <= 256);
+}
+
+OCP_INTERNAL int32_t sidGetLength (void)
+{
+	return sid_length_ms;
 }
 
 OCP_INTERNAL void sidIdle(struct cpifaceSessionAPI_t *cpifaceSession)
@@ -585,6 +749,24 @@ OCP_INTERNAL void sidStartSong (uint8_t sng)
 		sng=mySidTuneInfo->songs();
 	clipbusy++;
 	mySidPlayer->selecttrack (sng);
+	sid_track_start ();
+	clipbusy--;
+}
+
+/* key h (Omni): switches between PAL (50 Hz) and NTSC (60 Hz) for the file being
+ * played, and starts the current subsong again (the C64 must be reset). The next
+ * files use the setting of ocp.ini again. */
+OCP_INTERNAL void sidToggleVideoStandard (void)
+{
+	if (!mySidPlayer)
+	{
+		return;
+	}
+	clipbusy++;
+	mySidPlayer->setVideoStandard (sidGetVideo () ? false : true);
+	sid_clocks_per_row = mySidPlayer->GetVICIICyclesPerFrame();
+	sid_samples_per_row = (unsigned long long) sidRate * mySidPlayer->GetVICIICyclesPerFrame() / mySidPlayer->getMainCpuSpeed();
+	sid_track_start ();
 	clipbusy--;
 }
 
@@ -999,6 +1181,7 @@ OCP_INTERNAL int sidOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 		retval = errFormStruc;
 		goto error_out_mySidPlay;
 	}
+	sidlength_md5 ((const uint8_t *)buf, length, sid_md5);
 	delete [] buf; buf = 0;
 	mySidTuneInfo = mySidPlayer->getInfo();
 
@@ -1023,17 +1206,36 @@ OCP_INTERNAL int sidOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 	fprintf (stderr, "sid_samples_per_row=%u\n", (unsigned int)sid_samples_per_row);
 #endif
 
-	sid_buf_stereo = new int16_t [(MAX_ROW_BUFFERS + 1 /* the +1, is due to iterateaudio always mixes a full buffer page per iteration, so we memmove on wrap by hand */) * 2 * sid_samples_per_row](); /* 2 for stereo, ()=initialize the array to zero, ensure valgrind is happy */
-	sid_buf_4x3[0] = new int16_t [(MAX_ROW_BUFFERS + 1 /* the +1, is due to iterateaudio always mixes a full buffer page per iteration, so we memmove on wrap by hand */) * 4 * sid_samples_per_row](); /* 4 for 1 output and 3 internal channels, First SID IC */
-	sid_buf_4x3[1] = new int16_t [(MAX_ROW_BUFFERS + 1 /* the +1, is due to iterateaudio always mixes a full buffer page per iteration, so we memmove on wrap by hand */) * 4 * sid_samples_per_row](); /*                                         Second SID IC */
-	sid_buf_4x3[2] = new int16_t [(MAX_ROW_BUFFERS + 1 /* the +1, is due to iterateaudio always mixes a full buffer page per iteration, so we memmove on wrap by hand */) * 4 * sid_samples_per_row](); /*                                         Third SID IC */
+	/* key h switches between PAL and NTSC while the file plays: the buffers are made
+	 * for the longest video frame, the one of PAL (19656 cycles at 985248 Hz) */
+	frame_capacity = (unsigned long long) sidRate * 19656 / 985248 + 16;
+	if (frame_capacity < sid_samples_per_row + 16)
+	{
+		frame_capacity = sid_samples_per_row + 16;
+	}
+
+	sid_buf_stereo = new int16_t [MAX_ROW_BUFFERS * 2 * frame_capacity](); /* 2 for stereo, ()=initialize the array to zero, ensure valgrind is happy */
+	sid_buf_4x3[0] = new int16_t [MAX_ROW_BUFFERS * 4 * frame_capacity](); /* 4 for 1 output and 3 internal channels, First SID IC */
+	sid_buf_4x3[1] = new int16_t [MAX_ROW_BUFFERS * 4 * frame_capacity](); /*                                         Second SID IC */
+	sid_buf_4x3[2] = new int16_t [MAX_ROW_BUFFERS * 4 * frame_capacity](); /*                                         Third SID IC */
 	if ((!sid_buf_4x3[0]) || (!sid_buf_4x3[1]) || (!sid_buf_4x3[2]))
 	{
 		retval = errAllocMem;
 		goto error_out_sid_buffers;
 	}
+	{
+		int i, c;
+		for (i = 0; i < SIDEND_COMPARE; i++)
+		{
+			frames[i].stereo = new int16_t [2 * frame_capacity]();
+			for (c = 0; c < 3; c++)
+			{
+				frames[i].raw[c] = new int16_t [4 * frame_capacity]();
+			}
+		}
+	}
 
-	sid_buf_pos = cpifaceSession->ringbufferAPI->new_samples (RINGBUFFER_FLAGS_STEREO | RINGBUFFER_FLAGS_16BIT | RINGBUFFER_FLAGS_SIGNED | RINGBUFFER_FLAGS_PROCESS, MAX_ROW_BUFFERS * sid_samples_per_row);
+	sid_buf_pos = cpifaceSession->ringbufferAPI->new_samples (RINGBUFFER_FLAGS_STEREO | RINGBUFFER_FLAGS_16BIT | RINGBUFFER_FLAGS_SIGNED | RINGBUFFER_FLAGS_PROCESS, MAX_ROW_BUFFERS * frame_capacity);
 	if (!sid_buf_pos)
 	{
 		retval = errAllocMem;
@@ -1064,6 +1266,13 @@ OCP_INTERNAL int sidOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 		cpifaceSession->UseMessage((char **)msg);
 	}
 
+	sid_session = cpifaceSession;
+	sid_file = file;
+	file->ref (file);
+	sid_doloop = 0;
+	sid_loopdetect = cpifaceSession->configAPI->GetProfileBool ("libsidplayfp", "loopdetect", 1, 1);
+	sid_track_start ();
+
 	cpifaceSession->mcpSet = sidSet;
 	cpifaceSession->mcpGet = sidGet;
 	cpifaceSession->Normalize (cpifaceSession, mcpNormalizeDefaultPlayP);
@@ -1072,6 +1281,7 @@ OCP_INTERNAL int sidOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 
 	//cpifaceSession->ringbufferAPI->free (sid_buf_pos); sid_buf_pos = 0;
 error_out_sid_buffers:
+	free_frames ();
 	delete[] sid_buf_stereo; sid_buf_stereo = NULL;
 	delete[] sid_buf_4x3[0]; sid_buf_4x3[0] = NULL;
 	delete[] sid_buf_4x3[1]; sid_buf_4x3[1] = NULL;
@@ -1099,6 +1309,12 @@ OCP_INTERNAL void sidClosePlayer (struct cpifaceSessionAPI_t *cpifaceSession)
 
 	delete mySidPlayer;      mySidPlayer = NULL;
 	                         mySidTuneInfo = NULL;
+	free_frames ();
+	if (sid_file)
+	{
+		sid_file->unref (sid_file);
+		sid_file = 0;
+	}
 	delete[] sid_buf_stereo; sid_buf_stereo = NULL;
 	delete[] sid_buf_4x3[0]; sid_buf_4x3[0] = NULL;
 	delete[] sid_buf_4x3[1]; sid_buf_4x3[1] = NULL;

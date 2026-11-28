@@ -84,7 +84,7 @@ uninstall:
 	rm -f "$(DESTDIR)$(LIBDIROCP)/autoload/95-sidplay$(LIB_SUFFIX)"
 	rm -f "$(DESTDIR)$(BINDIR)/dumpsid$(EXE_SUFFIX)"
 
-playsid_so=cpiinfo.o cpisidsetup.o sidplay.o sidpplay.o sidconfig.o sidtype.o $(LIBSIDPLAYOBJECTS)
+playsid_so=cpiinfo.o cpisidsetup.o sidend.o sidlength.o sidplay.o sidpplay.o sidconfig.o sidtype.o $(LIBSIDPLAYOBJECTS)
 playsid$(LIB_SUFFIX): $(playsid_so)
 	$(CXX) $(SHARED_FLAGS) $(LDFLAGS) -o $@ $^
 
@@ -325,6 +325,21 @@ sidconfig.o: sidconfig.c \
 	sidconfig.h
 	$(CC) $< -o $@ -c
 
+sidend.o: sidend.c \
+	sidend.h
+	$(CC) $< -o $@ -c
+
+sidlength.o: sidlength.c \
+	md5.inc.c \
+	../config.h \
+	../types.h \
+	../boot/psetting.h \
+	../cpiface/cpiface.h \
+	../filesel/dirdb.h \
+	../filesel/filesystem.h \
+	sidlength.h
+	$(CC) $< -o $@ -c
+
 sidptype.o: \
 	sidptype.c \
 	../config.h \
@@ -353,6 +368,8 @@ sidplay.o: \
 	../filesel/filesystem.h \
 	../stuff/err.h \
 	../stuff/imsrtns.h \
+	sidend.h \
+	sidlength.h \
 	sidplay.h \
 	libsidplayfp-api.h
 	$(LIBSIDPLAYCXX) -I.. $(LIBSIDPLAYCXXFLAGS) $< -o $@ -c
