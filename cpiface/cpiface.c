@@ -59,6 +59,7 @@
 #include "boot/psetting.h"
 #include "cpiface/cpiface.h"
 #include "cpiface/cpiface-private.h"
+#include "cpiface/cpinorm.h"
 #include "cpiface/cpipic.h"
 #include "cpiface/cpiptype.h"
 #include "cpiface/mcpedit.h"
@@ -2324,7 +2325,7 @@ static int plmpOpenFile(struct moduleinfostruct *info, struct ocpfilehandle_t *f
 	const char *filename;
 
 	memset (&cpifaceSessionAPI, 0, sizeof (cpifaceSessionAPI));
-	cpifaceSessionAPI.Public.plrDevAPI = plrDevAPI;
+	cpifaceSessionAPI.Public.plrDevAPI = cpiNormalizeWrap (plrDevAPI);
 	cpifaceSessionAPI.Public.ringbufferAPI = &ringbufferAPI;
 	cpifaceSessionAPI.Public.mcpAPI = mcpAPI;
 	cpifaceSessionAPI.Public.mcpDevAPI = mcpDevAPI;

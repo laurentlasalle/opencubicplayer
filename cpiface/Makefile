@@ -259,6 +259,7 @@ cpiface.o: cpiface.c \
 	../boot/psetting.h \
 	../cpiface/cpiface.h \
 	../cpiface/cpiface-private.h \
+	../cpiface/cpinorm.h \
 	../cpiface/cpipic.h \
 	../cpiface/cpiptype.h \
 	../cpiface/mcpedit.h \
@@ -281,6 +282,17 @@ cpiface.o: cpiface.c \
 	../stuff/sets.h \
 	../stuff/utf-16.h
 	$(CC) cpiface.c -o $@ -c
+
+cpinorm.o: cpinorm.c \
+	../config.h \
+	../types.h \
+	../boot/psetting.h \
+	../dev/player.h \
+	../filesel/dirdb.h \
+	../filesel/filesystem.h \
+	../stuff/file.h \
+	cpinorm.h
+	$(CC) cpinorm.c -o $@ -c
 
 volctrl.o: volctrl.c \
 	../config.h \

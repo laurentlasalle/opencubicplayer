@@ -39,6 +39,13 @@
   bigmodules=devwMixF     ; this wavetable device will be used if a module
 ; was tagged "big" with alt-b in the fileselector.
 ; (use if wavetable ram is not enough by far)
+  normalize=on            ; play every file at about the same loudness (Omni), whatever its format
+  normalizetarget=-18     ; loudness to reach, in dBFS (-40 to -6)
+; A file never heard starts at its own volume: after 3 seconds of sound, its gain glides to the
+; one measured, then stays fixed until the end. When it stops after at least 10 seconds of sound,
+; its loudness is saved in CPLOUD.DAT (next to CPMODNFO.DAT), and the next time its gain is right
+; from the start. The files of several songs (NSF, SID and others) get the loudness of the first
+; one heard. Delete CPLOUD.DAT to measure everything again.
   amplify=100             ; -va100
   panning=100             ; -vp100
   volume=100              ; -vv100

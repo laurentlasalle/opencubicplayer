@@ -3,7 +3,7 @@ ifeq ($(HAVE_LZW),1)
 GIF_O=gif.o
 endif
 
-cpiface_so=fft.o cpianal.o cpichan.o cpidots.o cpiface.o cpigraph.o cpiinst.o cpikube.o cpilinks.o cpimsg.o cpimvol.o cpiphase.o cpipic.o cpiptype.o cpiscope.o cpitext.o cpitrack.o mcpedit.o tga.o volctrl.o
+cpiface_so=fft.o cpianal.o cpichan.o cpidots.o cpiface.o cpigraph.o cpinorm.o cpiinst.o cpikube.o cpilinks.o cpimsg.o cpimvol.o cpiphase.o cpipic.o cpiptype.o cpiscope.o cpitext.o cpitrack.o mcpedit.o tga.o volctrl.o
 
 # libocp_so is linked by parent
 cpiface_libocp_so=cpikeyhelp.o jpeg.o $(GIF_O) png.o
