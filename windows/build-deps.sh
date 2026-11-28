@@ -32,8 +32,12 @@ do_cmake () { # $1 = source dir, rest = args
     "$@" > $b.log 2>&1 || { tail -40 $b.log; return 1; }
   make -C $b -j$J install >> $b.log 2>&1 || { tail -60 $b.log; return 1; }
 }
-done_mark () { touch $PREFIX/.done-$1; }
-is_done () { test -f $PREFIX/.done-$1; }
+# A dependency counts as built only for the current versions: the marker holds a
+# checksum of the scripts that pin the versions and the build options, so changing
+# any of them builds everything again (as the cache key of the GitHub workflow does).
+STAMP=$(cat "$(dirname "$0")/config.sh" "$(dirname "$0")/fetch-sources.sh" "$0" | cksum | cut -d' ' -f1)
+done_mark () { echo $STAMP > $PREFIX/.done-$1; }
+is_done () { test "$(cat $PREFIX/.done-$1 2> /dev/null)" = "$STAMP"; }
 unpack () { rm -rf $B/$2; mkdir -p $B/$2; tar xf $SRC/$1 -C $B/$2 --strip-components=1; }
 
 step () { echo "=== $1"; }

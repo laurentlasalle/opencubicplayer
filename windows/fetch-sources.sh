@@ -7,14 +7,25 @@ mkdir -p $SRC $WORK/tc
 dl () { # url file
 	test -f "$SRC/$2" || curl -fsSL -o "$SRC/$2" "$1"
 }
+# Each cloned directory records the tag or commit it holds (.omni-ref): when a version
+# pinned below changes, the directory is downloaded again instead of being reused.
+fresh () { # dir ref: true if the directory holds that ref
+	test "$(cat "$SRC/$1/.omni-ref" 2> /dev/null)" = "$2"
+}
 clone () { # repo ref dir
-	test -d "$SRC/$3" || git clone -q --depth 1 --branch "$2" "$1" "$SRC/$3"
+	if ! fresh "$3" "$2"; then
+		rm -rf "$SRC/$3"
+		git clone -q --depth 1 --branch "$2" "$1" "$SRC/$3"
+		echo "$2" > "$SRC/$3/.omni-ref"
+	fi
 }
 clone_commit () { # repo commit dir (branches without tags)
-	if ! test -d "$SRC/$3"; then
+	if ! fresh "$3" "$2"; then
+		rm -rf "$SRC/$3"
 		git init -q "$SRC/$3"
 		git -C "$SRC/$3" fetch -q --depth 1 "$1" "$2"
 		git -C "$SRC/$3" checkout -q FETCH_HEAD
+		echo "$2" > "$SRC/$3/.omni-ref"
 	fi
 }
 

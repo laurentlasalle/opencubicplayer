@@ -37,17 +37,31 @@ BREW_PACKAGES="pkgconf xa autoconf automake libtool cmake sdl3 mad libogg libvor
 brew install --quiet $BREW_PACKAGES
 BREW=$(brew --prefix)
 
+# Each cloned directory records the tag or commit it holds (.omni-ref): when a pinned
+# version changes, the directory is downloaded again instead of being reused.
+fresh () { # dir ref: true if the directory holds that ref
+	test "$(cat "$SRC/$1/.omni-ref" 2> /dev/null)" = "$2"
+}
 clone_commit () { # repo commit dir
-	if ! test -d "$SRC/$3"; then
+	if ! fresh "$3" "$2"; then
+		rm -rf "$SRC/$3"
 		git init -q "$SRC/$3"
 		git -C "$SRC/$3" fetch -q --depth 1 "$1" "$2"
 		git -C "$SRC/$3" checkout -q FETCH_HEAD
+		echo "$2" > "$SRC/$3/.omni-ref"
+	fi
+}
+clone () { # repo tag dir
+	if ! fresh "$3" "$2"; then
+		rm -rf "$SRC/$3"
+		git clone -q --depth 1 --branch "$2" "$1" "$SRC/$3"
+		echo "$2" > "$SRC/$3/.omni-ref"
 	fi
 }
 mkdir -p $SRC $BUILD $DIST
 clone_commit "$GME_REPO" "$GME_REF" game-music-emu
 clone_commit https://github.com/ValleyBell/libvgm "$LIBVGM_REF" libvgm
-test -d "$SRC/mgba" || git clone -q --depth 1 --branch "$MGBA_TAG" https://github.com/mgba-emu/mgba "$SRC/mgba"
+clone https://github.com/mgba-emu/mgba "$MGBA_TAG" mgba
 
 step "game-music-emu (fork with the visualisation API)"
 if ! test -f $PREFIX/.gme-$GME_REF; then
@@ -74,7 +88,7 @@ if ! test -f $PREFIX/.libvgm-$LIBVGM_REF; then
 fi
 
 step "mGBA (static, only the Game Boy Advance core, linked into the GSF plugin)"
-if ! test -f $PREFIX/.mgba-$MGBA_TAG; then # LIBMGBA_ONLY: only the library (the Windows build otherwise requires libepoxy)
+if ! test -f $PREFIX/.mgba-$MGBA_TAG; then # LIBMGBA_ONLY: only the library, nothing of the mGBA application
 	rm -rf $BUILD/mgba
 	cmake -S $SRC/mgba -B $BUILD/mgba -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX \
 		-DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
@@ -240,7 +254,8 @@ rm -f "$APP/Contents/MacOS/plugtest"
 echo "plugins loaded ok"
 
 codesign --force --sign - "$APP"
-codesign --verify --verbose "$APP" || true
+# a bundle that fails this check would not open: stop the build here
+codesign --verify --deep --strict --verbose "$APP"
 
 step Launch test
 # a fresh home, so that the default ocp.ini of the bundle is used

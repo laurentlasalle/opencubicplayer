@@ -66,6 +66,7 @@ struct s98vis_t
 	uint32_t pos;            /* parser */
 	int ended;
 	int looped;              /* went through the loop point at least once */
+	double loop_jump_time;   /* song time of the last jump to the loop point, -1 before */
 	double time;             /* song time of the parser, seconds */
 	double next;             /* song time of the next frame */
 	long frame;
@@ -397,6 +398,7 @@ void s98vis_reset (struct s98vis_t *v)
 	v->pos = v->start;
 	v->ended = (v->start >= v->len);
 	v->looped = 0;
+	v->loop_jump_time = -1.0;
 	v->time = 0.0;
 	v->next = 0.0;
 	v->frame = 0;
@@ -704,6 +706,20 @@ static struct s98dev_t *vgm_dev (struct s98vis_t *v, int libvgm, int inst)
 	return (d >= 0) ? &v->dev[d] : 0;
 }
 
+/* At the end of the song, before jumping back to the loop point: false when no time
+ * passed since the previous jump. The looped part then has no wait command (a broken
+ * file, e.g. a loop point on the end command itself), and jumping again would never
+ * reach the requested song time: the song is treated as ended instead. */
+static int loop_advances (struct s98vis_t *v)
+{
+	if (v->time <= v->loop_jump_time)
+	{
+		return 0;
+	}
+	v->loop_jump_time = v->time;
+	return 1;
+}
+
 /* one VGM command (VGM specification 1.71) */
 static void vgm_step (struct s98vis_t *v)
 {
@@ -751,7 +767,7 @@ static void vgm_step (struct s98vis_t *v)
 		case 0x62: v->time += 735 / 44100.0; break;
 		case 0x63: v->time += 882 / 44100.0; break;
 		case 0x66:
-			if (v->loop && v->loop >= v->start && v->loop < v->len)
+			if (v->loop && v->loop >= v->start && v->loop < v->len && loop_advances (v))
 			{
 				v->pos = v->loop;
 				v->looped = 1;
@@ -839,7 +855,7 @@ void s98vis_run_until (struct s98vis_t *v, double t, void (*emit)(void *arg, dou
 				v->time += (n + 2) * v->tick;
 			} else if (cmd == 0xFD)
 			{
-				if (v->loop && v->loop < v->len && v->loop >= v->start)
+				if (v->loop && v->loop < v->len && v->loop >= v->start && loop_advances (v))
 				{
 					v->pos = v->loop;
 					v->looped = 1;
