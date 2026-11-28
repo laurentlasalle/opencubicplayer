@@ -199,7 +199,7 @@ A SID tune plays forever. Omni ends it, in this order:
  - after defaultlength= seconds (300 by default, 0 = forever).
 After a length, the tune fades out for fade= seconds (3 by default). With
 OCP's loop mode (Ctrl+L), the tune plays forever.
-Key h switches between PAL (50 Hz, Europe) and NTSC (60 Hz, America and
+Key R switches between PAL (50 Hz, Europe) and NTSC (60 Hz, America and
 Japan) for the file being played, and starts the current tune again: a tune
 written for the other standard plays too slow or too fast. The next files
 use the setting of ocp.ini again (defaultC64=, forceC64=).
@@ -261,10 +261,12 @@ Omni v10 (3.5.0-omni.10, in development)
  - SID: end of the tune from the HVSC song length database, or when it
    starts again after a silence, or after defaultlength=; fade-out after a
    length
- - SID: key h switches between PAL (50 Hz) and NTSC (60 Hz) for the file
+ - SID: key R switches between PAL (50 Hz) and NTSC (60 Hz) for the file
    being played
  - Volume normalization: every file at about the same loudness, whatever
    its format; the loudness of the files heard is kept in CPLOUD.DAT
+ - Alt+K: one row per action, with all its keys ("H ? ! F1"); letters are
+   shown in upper case, lower and upper case being the same key
 Omni v9 (3.5.0-omni.9, 2026-10-23)
  - Shuffle play: off / on (each file once) / endless (new rounds), also for
    the automatic advance in a directory; random order no longer the same at
@@ -366,7 +368,8 @@ build-deps.sh, build-ocp.sh, package.sh). Changes to the upstream sources:
    engine, read in a second mGBA; playgsf shares playgme/nsftrak.c and
    nsfvis.c
  - playsid/sidend.c, sidlength.c (new): end of the SID tunes (loop
-   detection, HVSC song lengths); key h (PAL / NTSC) in sidpplay.cpp
+   detection, HVSC song lengths); key R (PAL / NTSC) in sidpplay.cpp
+ - cpiface/cpikeyhelp.c: Alt+K groups the keys of the same action
  - cpiface/cpinorm.c (new): volume normalization of the sound sent to the
    player device
  - playvgms/ (new): vgmstream player; vgmstream r2168 (ISC license), built

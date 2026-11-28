@@ -330,9 +330,11 @@ static int sidProcessKey (struct cpifaceSessionAPI_t *cpifaceSession, uint16_t k
 			cpifaceSession->KeyHelp ('>', "Next track");
 			cpifaceSession->KeyHelp (KEY_CTRL_RIGHT, "Next track");
 			cpifaceSession->KeyHelp (KEY_CTRL_HOME, "Next to start of song");
-			cpifaceSession->KeyHelp ('h', "Switch between PAL (50 Hz) and NTSC (60 Hz), this file only");
+			cpifaceSession->KeyHelp ('r', "Switch between PAL (50 Hz) and NTSC (60 Hz), this file only");
+			cpifaceSession->KeyHelp ('R', "Switch between PAL (50 Hz) and NTSC (60 Hz), this file only");
 			return 0;
-		case 'h':
+		case 'r': /* region */
+		case 'R':
 			sidToggleVideoStandard ();
 			cpifaceSession->ResetSongTimer (cpifaceSession);
 			break;

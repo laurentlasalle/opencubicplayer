@@ -19,6 +19,8 @@
  */
 
 #include "config.h"
+#include <ctype.h>
+#include <stdio.h>
 #include <string.h>
 #include "types.h"
 #include "boot/plinkman.h"
@@ -215,6 +217,141 @@ static struct cpiKeyHelpKeyName KeyNames[] =
 static unsigned int keymapping_n = 0;
 static struct cpiKeyHelpKeyName keymapping[sizeof(KeyNames)/sizeof(struct cpiKeyHelpKeyName)];
 
+/* Omni: the list shows one row per action. The keys that do the same thing (same
+ * description) share a row ("H ? ! F1"); a letter is shown in upper case, and
+ * its lower and upper case count as one key, as in DOS programs. Only when the
+ * two cases do different things is the upper case shown as "Shift+X". */
+#define ROW_KEYS_LENGTH 48
+struct cpiKeyHelpRow
+{
+	char keys[ROW_KEYS_LENGTH];
+	const char *name;
+	int valid;
+};
+static struct cpiKeyHelpRow rows[sizeof(KeyNames)/sizeof(struct cpiKeyHelpKeyName)];
+static unsigned int rows_n;
+static unsigned int keycolumn = 16;
+static int rows_dirty = 1;
+
+static const char *KeyName (uint16_t key)
+{
+	unsigned int i;
+	for (i=0;i<(sizeof(KeyNames)/sizeof(struct cpiKeyHelpKeyName));i++)
+	{
+		if (KeyNames[i].key==key)
+		{
+			return KeyNames[i].name;
+		}
+	}
+	return "unknown key";
+}
+
+static const char *KeyHelpOf (uint16_t key)
+{
+	unsigned int i;
+	for (i=0;i<keymapping_n;i++)
+	{
+		if (keymapping[i].key==key)
+		{
+			return keymapping[i].name;
+		}
+	}
+	return 0;
+}
+
+/* "ctrl+page up" -> "Ctrl+Page Up", "f1" -> "F1", "x" -> "X" */
+static void KeyLabel (uint16_t key, char *dst, size_t size)
+{
+	const char *src;
+	size_t n = 0;
+	int start = 1;
+
+	if ((key >= 'A') && (key <= 'Z'))
+	{
+		const char *lower = KeyHelpOf (key + 'a' - 'A');
+		if (lower && strcmp (lower, KeyHelpOf (key)))
+		{ /* the lower case does something else */
+			snprintf (dst, size, "Shift+%c", (char)key);
+			return;
+		}
+	}
+	src = (key == ' ') ? "space" : KeyName (key);
+	for (; *src && (n + 1 < size); src++)
+	{
+		dst[n++] = start ? toupper ((unsigned char)*src) : *src;
+		start = (*src == '+') || (*src == ' ');
+	}
+	dst[n] = 0;
+}
+
+static void BuildRows (void)
+{
+	unsigned int i, j;
+	rows_n = 0;
+	keycolumn = 16;
+	for (i=0; i<keymapping_n; i++)
+	{
+		char label[32];
+		uint16_t key = keymapping[i].key;
+		struct cpiKeyHelpRow *row = 0;
+
+		/* a lower case letter that does the same as its upper case is the same key */
+		if ((key >= 'a') && (key <= 'z'))
+		{
+			const char *upper = KeyHelpOf (key + 'A' - 'a');
+			if (upper && !strcmp (upper, keymapping[i].name))
+			{
+				continue; /* shown with the upper case */
+			}
+			key = key + 'A' - 'a';
+			if (upper)
+			{ /* the upper case does something else: this is the plain key */
+				label[0] = (char)key;
+				label[1] = 0;
+				goto have_label;
+			}
+		}
+		KeyLabel (key, label, sizeof (label));
+have_label:
+		for (j=0; j<rows_n; j++)
+		{
+			if (!strcmp (rows[j].name, keymapping[i].name))
+			{
+				row = rows + j;
+				break;
+			}
+		}
+		if (!row)
+		{
+			row = rows + rows_n++;
+			row->keys[0] = 0;
+			row->name = keymapping[i].name;
+			row->valid = 0;
+		}
+		if ((strlen (row->keys) + 1 + strlen (label)) < ROW_KEYS_LENGTH)
+		{
+			if (row->keys[0])
+			{
+				strcat (row->keys, " ");
+			}
+			strcat (row->keys, label);
+		}
+		if (validkey (keymapping[i].key))
+		{
+			row->valid = 1;
+		}
+		if ((strlen (row->keys) + 2) > keycolumn)
+		{
+			keycolumn = strlen (row->keys) + 2;
+		}
+	}
+	if (keycolumn > 30)
+	{
+		keycolumn = 30;
+	}
+	rows_dirty = 0;
+}
+
 
 void cpiKeyHelp(uint16_t key, const char *shorthelp)
 {
@@ -230,6 +367,7 @@ void cpiKeyHelp(uint16_t key, const char *shorthelp)
 	keymapping[keymapping_n].key=key;
 	keymapping[keymapping_n].name = shorthelp;
 	keymapping_n++;
+	rows_dirty = 1;
 }
 
 static unsigned int top;
@@ -243,9 +381,9 @@ static void DrawBoxCommon(void)
 {
 	int i;
 	int widest = 0;
-	for (i=0; i < keymapping_n; i++)
+	for (i=0; i < rows_n; i++)
 	{
-		int len = strlen (keymapping[i].name);
+		int len = strlen (rows[i].name);
 		if (len > widest)
 		{
 			widest = len;
@@ -255,22 +393,22 @@ static void DrawBoxCommon(void)
 	height = plScrHeight-4;
 	width = plScrWidth-4;
 
-	if (height > keymapping_n)
+	if (height > rows_n)
 	{
-		height = keymapping_n;
+		height = rows_n;
 	}
 
-	if (width > (widest + 15))
+	if (width > (widest + keycolumn - 1))
 	{
-		width = widest + 15;
+		width = widest + keycolumn - 1;
 	}
 
 	top = (plScrHeight - height) / 2;
 	left = (plScrWidth - width) / 2;
 
-	if (height < keymapping_n)
+	if (height < rows_n)
 	{
-		vpos = offset * (height - 1) / (keymapping_n - height);
+		vpos = offset * (height - 1) / (rows_n - height);
 	}
 }
 
@@ -321,22 +459,28 @@ void cpiKeyHelpClear(void)
 {
 	offset = 0;
 	keymapping_n=0;
+	rows_dirty = 1;
 }
 
 int cpiKeyHelpDisplay(void)
 {
-	unsigned int i, j;
+	unsigned int j;
 	unsigned char cola, colb;
 
 	if (!keymapping_n)
 		return 0;
 
-	if (keymapping_n <= height)
+	if (rows_dirty)
+	{
+		BuildRows ();
+	}
+
+	if (rows_n <= height)
 	{
 		offset = 0;
-	} else if ((keymapping_n-offset)<height)
+	} else if ((rows_n-offset)<height)
 	{
-		offset = keymapping_n - height;
+		offset = rows_n - height;
 	}
 
 	if ((plScrMode==100)||(plScrMode==101)||(plScrMode==13))
@@ -346,20 +490,12 @@ int cpiKeyHelpDisplay(void)
 		DrawBox();
 	}
 
-	for (j=0;j<(keymapping_n-offset);j++)
+	for (j=0;j<(rows_n-offset);j++)
 	{
-		const char *s="unknown key";
+		const struct cpiKeyHelpRow *row = rows + j + offset;
 		if (j>=height)
 			break;
-		for (i=0;i<(sizeof(KeyNames)/sizeof(struct cpiKeyHelpKeyName));i++)
-		{
-			if (KeyNames[i].key==keymapping[j+offset].key)
-			{
-				s=KeyNames[i].name;
-				break;
-			}
-		}
-		if (validkey(KeyNames[i].key))
+		if (row->valid)
 		{
 			cola=0x0f;
 			colb=0x0a;
@@ -369,11 +505,11 @@ int cpiKeyHelpDisplay(void)
 		}
 		if ((plScrMode==100)||(plScrMode==101)||(plScrMode==13))
 		{
-			gdrawstr(j+top, left, colb, s, 16);
-			gdrawstr(j+top, left+16, cola, keymapping[j+offset].name, width-15);
+			gdrawstr(j+top, left, colb, row->keys, keycolumn);
+			gdrawstr(j+top, left+keycolumn, cola, row->name, width-keycolumn+1);
 		} else {
-			displaystr(j+top, left, colb, s, 16);
-			displaystr(j+top, left+16, cola, keymapping[j+offset].name, width-15);
+			displaystr(j+top, left, colb, row->keys, keycolumn);
+			displaystr(j+top, left+keycolumn, cola, row->name, width-keycolumn+1);
 		}
 	}
 	if ((plScrMode==100)||(plScrMode==101)||(plScrMode==13))
@@ -400,7 +536,7 @@ int cpiKeyHelpDisplay(void)
 			case ' ':
 			case KEY_NPAGE:
 			case KEY_DOWN:
-				if ((keymapping_n-offset)>height)
+				if ((rows_n-offset)>height)
 					offset++;
 				break;
 			case _KEY_ENTER:

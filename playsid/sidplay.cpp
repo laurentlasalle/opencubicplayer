@@ -753,7 +753,7 @@ OCP_INTERNAL void sidStartSong (uint8_t sng)
 	clipbusy--;
 }
 
-/* key h (Omni): switches between PAL (50 Hz) and NTSC (60 Hz) for the file being
+/* key R (Omni): switches between PAL (50 Hz) and NTSC (60 Hz) for the file being
  * played, and starts the current subsong again (the C64 must be reset). The next
  * files use the setting of ocp.ini again. */
 OCP_INTERNAL void sidToggleVideoStandard (void)
@@ -1206,7 +1206,7 @@ OCP_INTERNAL int sidOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 	fprintf (stderr, "sid_samples_per_row=%u\n", (unsigned int)sid_samples_per_row);
 #endif
 
-	/* key h switches between PAL and NTSC while the file plays: the buffers are made
+	/* key R switches between PAL and NTSC while the file plays: the buffers are made
 	 * for the longest video frame, the one of PAL (19656 cycles at 985248 Hz) */
 	frame_capacity = (unsigned long long) sidRate * 19656 / 985248 + 16;
 	if (frame_capacity < sid_samples_per_row + 16)

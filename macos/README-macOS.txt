@@ -47,7 +47,7 @@ PC-98, X1, X68000), VGM files for chips that Game Music Emu does not emulate,
 GSF / MINIGSF files (Game Boy Advance, through mGBA) and the audio streams of
 games (GENH, ADX, BRSTM and others, through vgmstream). It also ends SID
 tunes (HVSC song lengths, or when they start again after a silence), switches
-SID files between PAL and NTSC with key h, and plays every file at about the
+SID files between PAL and NTSC with key R, and plays every file at about the
 same loudness ([sound] normalize=; the loudness of the files heard is kept in
 ~/.local/share/ocp/CPLOUD.DAT). README-Windows.txt in the source repository
 describes them and the tracker view.

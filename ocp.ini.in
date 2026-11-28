@@ -185,7 +185,7 @@
 ;  - when it starts again after a silence of at least 1 second (loopdetect=on);
 ;  - after defaultlength= seconds (0 plays forever).
 ; A fade-out of fade= seconds is added after a length. Loop mode (Ctrl+L) plays
-; forever. Key h switches between PAL (50 Hz) and NTSC (60 Hz) for the file being
+; forever. Key R switches between PAL (50 Hz) and NTSC (60 Hz) for the file being
 ; played, and starts the current tune again.
 ; songlengths=C:\HVSC\C64Music\DOCUMENTS\Songlengths.md5
   songlengths=
