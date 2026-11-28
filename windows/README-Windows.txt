@@ -175,6 +175,21 @@ There is no tracker view: most games mix all their instruments by
 themselves into the two digital channels, so the notes cannot be read from
 the sound chip.
 
+Audio streams of games (GENH, ADX, BRSTM and others) - played by vgmstream
+---------------------------------------------------------------------------
+The new playvgms player plays the recorded sound of games through vgmstream:
+GENH, ADX (Sega), BRSTM (Wii), HCA, XA (PlayStation) and hundreds of other
+formats, with the loop points of the files. A stream that loops plays the
+looped part [gme] loops= times, then fades out for [gme] fade= seconds (the
+same settings as the other game music formats). Files that hold several
+streams (sound banks) have subsongs: keys < and > (or Ctrl+Left and
+Ctrl+Right) go from one to the other. Key i shows the information view
+(container, codec, channels, loop points).
+vgmstream is built with its own decoders only (without FFmpeg, mpg123 or
+Vorbis), so a few formats that need these libraries are not played. The
+common formats (WAV, MP3, OGG, FLAC and others) stay with the players OCP
+already has. As for any recorded sound, there is no tracker view.
+
 Unifont fonts (recommended)
 ---------------------------
 GNU Unifont is not included. OCP works without it, but characters outside
@@ -190,6 +205,10 @@ Release history
 Omni v1 to v6 were distributed as "3.5.1" to "3.5.6".
 Omni v10 (3.5.0-omni.10, in development)
  - GSF and MINIGSF files (Game Boy Advance), played by mGBA
+ - audio streams of games (GENH, ADX, BRSTM, HCA and hundreds of other
+   formats), played by vgmstream
+ - S98 and VGM files with a broken loop point no longer freeze OCP when
+   they are opened
 Omni v9 (3.5.0-omni.9, 2026-10-23)
  - Shuffle play: off / on (each file once) / endless (new rounds), also for
    the automatic advance in a directory; random order no longer the same at
@@ -287,4 +306,7 @@ build-deps.sh, build-ocp.sh, package.sh). Changes to the upstream sources:
    built with only its Game Boy Advance core, is linked statically into
    95-playgsf.dll. filesel/pfilesel.c: file extensions of up to 7
    characters (MINIGSF)
+ - playvgms/ (new): vgmstream player; vgmstream r2168 (ISC license), built
+   without FFmpeg, mpg123 and Vorbis, is linked statically into
+   95-playvgms.dll
 iconv is provided by win-iconv instead of GNU libiconv.

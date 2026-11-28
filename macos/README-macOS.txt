@@ -44,7 +44,8 @@ Formats added by Omni
 ---------------------
 Besides the formats of Open Cubic Player, Omni plays S98 files (PC-88,
 PC-98, X1, X68000), VGM files for chips that Game Music Emu does not emulate,
-and GSF / MINIGSF files (Game Boy Advance, through mGBA). README-Windows.txt
+GSF / MINIGSF files (Game Boy Advance, through mGBA) and the audio streams of
+games (GENH, ADX, BRSTM and others, through vgmstream). README-Windows.txt
 in the source repository describes them and the tracker view.
 
 Command line

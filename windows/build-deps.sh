@@ -195,4 +195,19 @@ if ! is_done mgba; then step mgba
   make -C $b -j$J install >> $b.log 2>&1 || { tail -60 $b.log; exit 1; }
   done_mark mgba; fi
 
+# vgmstream (static, linked into 95-playvgms.dll): only its own decoders (no FFmpeg,
+# mpg123 or Vorbis); its build has no install rule for the library, so the library
+# and its two public headers are copied by hand
+if ! is_done vgmstream; then step vgmstream
+  b=$B/vgmstream-build; rm -rf $b
+  cmake -S $SRC/vgmstream -B $b -G"Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=$B/toolchain.cmake \
+    -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+    -DUSE_MPEG=OFF -DUSE_VORBIS=OFF -DUSE_FFMPEG=OFF -DUSE_CELT=OFF -DUSE_SPEEX=OFF \
+    -DBUILD_CLI=OFF -DBUILD_V123=OFF -DBUILD_AUDACIOUS=OFF -DBUILD_WINAMP=OFF -DBUILD_XMPLAY=OFF -DBUILD_FB2K=OFF \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON > $b.log 2>&1 || { tail -40 $b.log; exit 1; }
+  make -C $b -j$J libvgmstream >> $b.log 2>&1 || { tail -60 $b.log; exit 1; }
+  cp $b/src/libvgmstream.a $PREFIX/lib/
+  cp $SRC/vgmstream/src/libvgmstream.h $SRC/vgmstream/src/libvgmstream_streamfile.h $PREFIX/include/
+  done_mark vgmstream; fi
+
 echo "all dependencies built in $PREFIX"

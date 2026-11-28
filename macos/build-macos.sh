@@ -25,6 +25,7 @@ GME_REPO=$(sed -n 's/^GME_REPO=\${GME_REPO:-\([^}]*\)}.*/\1/p' $OCP_SRC/windows/
 GME_REF=$(sed -n 's/^GME_REF=\${GME_REF:-\([0-9a-f]*\)}.*/\1/p' $OCP_SRC/windows/config.sh)
 LIBVGM_REF=$(sed -n 's/^clone_commit https:\/\/github.com\/ValleyBell\/libvgm \([0-9a-f]*\) .*/\1/p' $OCP_SRC/windows/fetch-sources.sh)
 MGBA_TAG=$(sed -n 's/^clone https:\/\/github.com\/mgba-emu\/mgba \([0-9.]*\) .*/\1/p' $OCP_SRC/windows/fetch-sources.sh)
+VGMSTREAM_TAG=$(sed -n 's/^clone https:\/\/github.com\/vgmstream\/vgmstream \([0-9a-z]*\) .*/\1/p' $OCP_SRC/windows/fetch-sources.sh)
 
 # <upstream OCP version>-omni.<Omni release>, e.g. 3.5.0-omni.8
 VERSION=$(sed -n 's/^PACKAGE_VERSION=.\([0-9.]*\).$/\1/p' $OCP_SRC/configure)-omni.$(sed -n 's/^#define OMNI_VERSION \([0-9]*\)$/\1/p' $OCP_SRC/omni-version.h)$VERSION_SUFFIX
@@ -62,6 +63,7 @@ mkdir -p $SRC $BUILD $DIST
 clone_commit "$GME_REPO" "$GME_REF" game-music-emu
 clone_commit https://github.com/ValleyBell/libvgm "$LIBVGM_REF" libvgm
 clone https://github.com/mgba-emu/mgba "$MGBA_TAG" mgba
+clone https://github.com/vgmstream/vgmstream "$VGMSTREAM_TAG" vgmstream
 
 step "game-music-emu (fork with the visualisation API)"
 if ! test -f $PREFIX/.gme-$GME_REF; then
@@ -100,6 +102,21 @@ if ! test -f $PREFIX/.mgba-$MGBA_TAG; then # LIBMGBA_ONLY: only the library, not
 		-DCMAKE_POSITION_INDEPENDENT_CODE=ON > $BUILD/mgba.log 2>&1 || { tail -40 $BUILD/mgba.log; exit 1; }
 	make -C $BUILD/mgba -j$J install >> $BUILD/mgba.log 2>&1 || { tail -60 $BUILD/mgba.log; exit 1; }
 	touch $PREFIX/.mgba-$MGBA_TAG
+fi
+
+step "vgmstream (static, only its own decoders, linked into the vgmstream plugin)"
+if ! test -f $PREFIX/.vgmstream-$VGMSTREAM_TAG; then
+	rm -rf $BUILD/vgmstream
+	cmake -S $SRC/vgmstream -B $BUILD/vgmstream -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+		-DUSE_MPEG=OFF -DUSE_VORBIS=OFF -DUSE_FFMPEG=OFF -DUSE_CELT=OFF -DUSE_SPEEX=OFF \
+		-DBUILD_CLI=OFF -DBUILD_V123=OFF -DBUILD_AUDACIOUS=OFF -DBUILD_WINAMP=OFF -DBUILD_XMPLAY=OFF -DBUILD_FB2K=OFF \
+		-DCMAKE_POSITION_INDEPENDENT_CODE=ON > $BUILD/vgmstream.log 2>&1 || { tail -40 $BUILD/vgmstream.log; exit 1; }
+	make -C $BUILD/vgmstream -j$J libvgmstream >> $BUILD/vgmstream.log 2>&1 || { tail -60 $BUILD/vgmstream.log; exit 1; }
+	# no install rule for the library in vgmstream's build: copied by hand with its public headers
+	mkdir -p $PREFIX/lib $PREFIX/include
+	cp $BUILD/vgmstream/src/libvgmstream.a $PREFIX/lib/
+	cp $SRC/vgmstream/src/libvgmstream.h $SRC/vgmstream/src/libvgmstream_streamfile.h $PREFIX/include/
+	touch $PREFIX/.vgmstream-$VGMSTREAM_TAG
 fi
 
 step "Open Cubic Player"

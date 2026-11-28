@@ -25,6 +25,10 @@ endif
 ifeq ($(shell printf '\043include <mgba/core/core.h>\n' | $(CC) -E -x c - > /dev/null 2>&1 && echo 1),1)
 SUBDIRS+=playgsf
 endif
+# vgmstream player, needs the vgmstream headers and static library (https://vgmstream.org) in the search paths of CFLAGS and LDFLAGS
+ifeq ($(shell printf '\043include <libvgmstream.h>\n' | $(CC) -E -x c - > /dev/null 2>&1 && echo 1),1)
+SUBDIRS+=playvgms
+endif
 SUBDIRS+=playsid playwav playxm playym stuff
 SUBDIRS+=mingw
 

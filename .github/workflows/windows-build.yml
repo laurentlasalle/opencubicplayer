@@ -19,7 +19,7 @@ jobs:
       contents: write
     env:
       WORK: ${{ github.workspace }}/.work   # absolute path without "..", required by upload-artifact
-      VERSION_SUFFIX: ${{ github.event_name == 'push' && '-test1' || github.event.inputs.suffix }}
+      VERSION_SUFFIX: ${{ github.event_name == 'push' && '-test2' || github.event.inputs.suffix }}
     steps:
       - uses: actions/checkout@v4
         with:
