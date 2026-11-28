@@ -38,6 +38,7 @@ OCP_INTERNAL void sidIdle (struct cpifaceSessionAPI_t *cpifaceSession);
 OCP_INTERNAL void sidStartSong (uint8_t sng);
 OCP_INTERNAL uint8_t sidGetSong (void);
 OCP_INTERNAL void sidToggleVideoStandard (void);
+OCP_INTERNAL const char *sidSwitchedVideoString (void);
 OCP_INTERNAL void sidSetLoop (int loop);
 OCP_INTERNAL int sidIsEnded (struct cpifaceSessionAPI_t *cpifaceSession);
 OCP_INTERNAL int32_t sidGetLength (void);

@@ -56,6 +56,20 @@ During playback, Enter skips to the next file of the directory.
                    and nothing advances
 If the playlist (right pane) holds files, it has priority, as before.
 
+Setup of the players in ALT-C (file browser)
+--------------------------------------------
+Below the file browser settings, ALT-C now lists the ocp.ini settings of
+the players added by Omni, in one place: SID (song length database, end
+when the tune starts again, default length, fade-out), volume
+normalization, S98 (loops, fade-out) and game music (tracker view, frames
+per row, default length, loops, fade-out). Press the letter of an item:
+on/off items switch, the others ask for a number or, for the song length
+database, a file path (TAB completes the names). A change applies to the
+next file opened; ALT-S saves everything to ocp.ini. On a small screen
+(80x25), the player setup is on a second page: TAB goes from one page to
+the other. The same settings stay in the dialogs of the setup: folder
+(sidconfig.dev, gmeconfig.dev).
+
 Shuffle play (ALT-C, item 2; [fileselector] randomplay=)
 --------------------------------------------------------
     off       files in order
@@ -202,7 +216,9 @@ OCP's loop mode (Ctrl+L), the tune plays forever.
 Key R switches between PAL (50 Hz, Europe) and NTSC (60 Hz, America and
 Japan) for the file being played, and starts the current tune again: a tune
 written for the other standard plays too slow or too fast. The next files
-use the setting of ocp.ini again (defaultC64=, forceC64=).
+use the setting of ocp.ini again (defaultC64=, forceC64=). While the other
+standard is used, the Song Speed line of the information view (key t)
+shows it in yellow.
 
 Volume normalization (section [sound])
 --------------------------------------
@@ -267,6 +283,10 @@ Omni v10 (3.5.0-omni.10, in development)
    its format; the loudness of the files heard is kept in CPLOUD.DAT
  - Alt+K: one row per action, with all its keys ("H ? ! F1"); letters are
    shown in upper case, lower and upper case being the same key
+ - Closing the window while the Alt+K list is shown no longer freezes OCP
+ - SID: the Song Speed line shows in yellow the standard chosen with key R
+ - ALT-C: setup of the players (SID, volume normalization, S98, game
+   music), saved to ocp.ini with ALT-S
 Omni v9 (3.5.0-omni.9, 2026-10-23)
  - Shuffle play: off / on (each file once) / endless (new rounds), also for
    the automatic advance in a directory; random order no longer the same at

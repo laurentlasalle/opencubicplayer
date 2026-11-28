@@ -144,6 +144,7 @@ static double sid_pos_ms;                       /* emulated time since the (sub)
 static char sid_md5[33];                        /* of the file, for the song length database */
 static struct ocpfilehandle_t *sid_file;
 static struct cpifaceSessionAPI_t *sid_session;
+static int sid_video_switched;                  /* key R: the file plays with the other video standard */
 
 #define PANPROC \
 do { \
@@ -660,6 +661,16 @@ OCP_INTERNAL const char *sidTuneStatusString (void)
 	return mySidPlayer->getTuneStatusString();
 }
 
+/* NULL if the file plays at its own speed; otherwise the video standard chosen with key R */
+OCP_INTERNAL const char *sidSwitchedVideoString (void)
+{
+	if (!mySidPlayer || !sid_video_switched)
+	{
+		return 0;
+	}
+	return sidGetVideo () ? "PAL (50Hz)" : "NTSC (60Hz)";
+}
+
 OCP_INTERNAL const char *sidTuneInfoClockSpeedString (void)
 {
 	return libsidplayfp::tuneInfo_clockSpeed_toString(mySidPlayer->getTuneInfoClockSpeed());
@@ -764,6 +775,7 @@ OCP_INTERNAL void sidToggleVideoStandard (void)
 	}
 	clipbusy++;
 	mySidPlayer->setVideoStandard (sidGetVideo () ? false : true);
+	sid_video_switched = !sid_video_switched;
 	sid_clocks_per_row = mySidPlayer->GetVICIICyclesPerFrame();
 	sid_samples_per_row = (unsigned long long) sidRate * mySidPlayer->GetVICIICyclesPerFrame() / mySidPlayer->getMainCpuSpeed();
 	sid_track_start ();
@@ -1270,6 +1282,7 @@ OCP_INTERNAL int sidOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 	sid_file = file;
 	file->ref (file);
 	sid_doloop = 0;
+	sid_video_switched = 0;
 	sid_loopdetect = cpifaceSession->configAPI->GetProfileBool ("libsidplayfp", "loopdetect", 1, 1);
 	sid_track_start ();
 

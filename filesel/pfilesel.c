@@ -3277,7 +3277,20 @@ static int fsCompareNoCase (const void *a, const void *b)
 	return strcasecmp (*(char * const *)a, *(char * const *)b);
 }
 
+static int fsCompleteEntries (const char *typed, char ***matches, int files);
+
 static int fsCompletePath (const char *typed, char ***matches)
+{
+	return fsCompleteEntries (typed, matches, 0);
+}
+
+/* folders, then the file name: for the path of a file (Alt+C item G) */
+static int fsCompleteFilePath (const char *typed, char ***matches)
+{
+	return fsCompleteEntries (typed, matches, 1);
+}
+
+static int fsCompleteEntries (const char *typed, char ***matches, int files)
 {
 	const char *prefix = typed; /* "file:" drive prefix shown by the path editor */
 	const char *last = 0, *p, *name;
@@ -3320,7 +3333,7 @@ static int fsCompletePath (const char *typed, char ***matches)
 	memcpy (dir, prefix, name - prefix);
 	dir[name - prefix] = 0;
 
-#define FS_ADD_MATCH(entry) \
+#define FS_ADD_MATCH(entry,isdir) \
 	do { \
 		char *m; \
 		if (count == size) \
@@ -3333,7 +3346,8 @@ static int fsCompletePath (const char *typed, char ***matches)
 		m = malloc ((name - typed) + strlen (entry) + 2); \
 		if (!m) break; \
 		memcpy (m, typed, name - typed); \
-		sprintf (m + (name - typed), "%s%c", entry, sep); \
+		if (isdir) sprintf (m + (name - typed), "%s%c", entry, sep); \
+		else       strcpy  (m + (name - typed), entry); \
 		(*matches)[count++] = m; \
 	} while (0)
 
@@ -3351,14 +3365,14 @@ static int fsCompletePath (const char *typed, char ***matches)
 			wl = wcslen ((wchar_t *)wname);
 			do
 			{
-				if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
+				if ((files || (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) &&
 				    wcscmp (fd.cFileName, L".") && wcscmp (fd.cFileName, L"..") &&
 				    !_wcsnicmp (fd.cFileName, (wchar_t *)wname, wl))
 				{
 					char *u = utf16_to_utf8 ((uint16_t *)fd.cFileName);
 					if (u)
 					{
-						FS_ADD_MATCH(u);
+						FS_ADD_MATCH(u, fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
 						free (u);
 					}
 				}
@@ -3401,9 +3415,9 @@ static int fsCompletePath (const char *typed, char ***matches)
 					continue;
 				}
 				sprintf (full, "%s%s", dir[0] ? dir : "./", de->d_name);
-				if (!stat (full, &st) && S_ISDIR (st.st_mode))
+				if (!stat (full, &st) && (files || S_ISDIR (st.st_mode)))
 				{
-					FS_ADD_MATCH(de->d_name);
+					FS_ADD_MATCH(de->d_name, S_ISDIR (st.st_mode));
 				}
 				free (full);
 			}
@@ -3442,12 +3456,117 @@ static char *fsNativeCurrentDir (void)
 	return r;
 }
 
+/* Alt+C, player setup (Omni): the settings of ocp.ini used by the players, in one
+ * place. They also have their own dialogs (setup:/sidconfig.dev, gmeconfig.dev).
+ * A change applies to the next file opened; ALT-S writes it to ocp.ini. */
+enum { PS_BOOL, PS_INT, PS_PATH };
+static const struct fsPlayerSetting
+{
+	char key;
+	int type;
+	const char *section, *name, *label, *unit;
+	int def, min, max;
+} fsPlayerSettings[] =
+{
+	{'G', PS_PATH, "libsidplayfp", "songlengths",     "SID: song length database (Songlengths.md5)", "",        0,    0,   0},
+	{'H', PS_BOOL, "libsidplayfp", "loopdetect",      "SID: end when the tune starts again",       "",          1,    0,   1},
+	{'I', PS_INT,  "libsidplayfp", "defaultlength",   "SID: default length (0 = forever)",         "seconds", 300,    0, 3600},
+	{'J', PS_INT,  "libsidplayfp", "fade",            "SID: fade-out after a length",              "seconds",   3,    0,  60},
+	{'K', PS_BOOL, "sound",        "normalize",       "volume normalization",                      "",          1,    0,   1},
+	{'L', PS_INT,  "sound",        "normalizetarget", "volume normalization, loudness to reach",   "dBFS",    -18,  -40,  -6},
+	{'M', PS_INT,  "s98",          "loops",           "S98: loops before the fade-out",            "times",     2,    1, 100},
+	{'N', PS_INT,  "s98",          "fade",            "S98: fade-out",                             "seconds",   8,    0,  60},
+	{'O', PS_BOOL, "gme",          "trackerview",     "game music: tracker view",                  "",          1,    0,   1},
+	{'P', PS_INT,  "gme",          "rowframes",       "game music: tracker view, frames per row",  "frames",    6,    1,  32},
+	{'Q', PS_INT,  "gme",          "defaultlength",   "game music: default length (0 = forever)",  "seconds", 150,    0, 3600},
+	{'R', PS_INT,  "gme",          "loops",           "game music: loops before the fade-out",     "times",     2,    1, 100},
+	{'S', PS_INT,  "gme",          "fade",            "game music: fade-out",                      "seconds",   8,    0,  60},
+};
+#define FS_PLAYER_SETTINGS (int)(sizeof (fsPlayerSettings) / sizeof (fsPlayerSettings[0]))
+
+static int fsPlayerSettingInt (const struct fsPlayerSetting *p)
+{
+	int v = (p->type == PS_BOOL) ? cfGetProfileBool (p->section, p->name, p->def, p->def)
+	                              : cfGetProfileInt  (p->section, p->name, p->def, 10);
+	if (v < p->min) v = p->min;
+	if (v > p->max) v = p->max;
+	return v;
+}
+
+static void fsPlayerSettingDraw (int row, const struct fsPlayerSetting *p)
+{
+	if (p->type == PS_PATH)
+	{
+		const char *v = cfGetProfileString (p->section, p->name, "");
+		display_nprintf (row, 0, 0x07, plScrWidth, "%c:  %s: %.15o%s", p->key, p->label, v[0] ? v : "(found in the HVSC folder of the file)");
+	} else if (p->type == PS_BOOL)
+	{
+		display_nprintf (row, 0, 0x07, plScrWidth, "%c:  %s: %.15o%s", p->key, p->label, fsPlayerSettingInt (p) ? "on" : "off");
+	} else {
+		display_nprintf (row, 0, 0x07, plScrWidth, "%c:  %s: %.15o%d %s", p->key, p->label, fsPlayerSettingInt (p), p->unit);
+	}
+}
+
+/* types a new value for a number or a path */
+static void fsPlayerSettingEdit (int row, const struct fsPlayerSetting *p)
+{
+	char *edit, number[16];
+	int r, x;
+
+	if (p->type == PS_PATH)
+	{
+		edit = strdup (cfGetProfileString (p->section, p->name, ""));
+		displaystr (plScrHeight-1, 0, 0x17, "  type the path of the file, TAB completes the name, empty = only the HVSC folder of the file, ENTER accepts, ESC cancels", plScrWidth);
+		EditStringSetCompletion (fsCompleteFilePath);
+	} else {
+		snprintf (number, sizeof (number), "%d", fsPlayerSettingInt (p));
+		edit = strdup (number);
+		{
+			char help[128];
+			snprintf (help, sizeof (help), "  type a number from %d to %d, ENTER accepts, ESC cancels", p->min, p->max);
+			displaystr (plScrHeight-1, 0, 0x17, help, plScrWidth);
+		}
+	}
+	if (!edit)
+	{
+		EditStringSetCompletion (0);
+		return;
+	}
+	x = 4 + strlen (p->label) + 2;
+	displayvoid (row, 0, plScrWidth);
+	display_nprintf (row, 0, 0x07, x, "%c:  %s:", p->key, p->label);
+	while ((r = EditStringUTF8 (row, x, plScrWidth - x, &edit)) > 0)
+	{
+	}
+	EditStringSetCompletion (0);
+	if (!r)
+	{
+		if (p->type == PS_PATH)
+		{
+			cfSetProfileString (p->section, p->name, edit);
+		} else {
+			char *end;
+			long v = strtol (edit, &end, 10);
+			if ((end != edit) && !*end)
+			{
+				if (v < p->min) v = p->min;
+				if (v > p->max) v = p->max;
+				cfSetProfileInt (p->section, p->name, (int)v, 10);
+			}
+		}
+	}
+	free (edit);
+}
+
 void fsSetup(void)
 {
 	int stored = 0;
 	uint16_t c;
 	int LastCurrent;
 	int InKeyboardHelp = 0;
+	int page = 0; /* the player setup has its own page when the screen is too small */
+	int onepage, playerrow;
+	int pending = -1; /* player setting to edit */
 
 	plSetTextMode(plScrType);
 	while (1)
@@ -3483,16 +3602,50 @@ superbreak:
 		display_nprintf (15, 0, 0x07, plScrWidth, "F:  start directory: %.15o%s", (!fsStartPath || !fsStartPath[0]) ? "(Music folder)" : strcmp (fsStartPath, ".") ? fsStartPath : "(where OCP is started)");
 		display_nprintf (16, 0, 0x07, plScrWidth, "+-: target framerate:%.15o%-4d%.7o, actual framerate: %.15o%d", fsFPS, LastCurrent=fsFPSCurrent);
 
-		displayvoid (17, 0, plScrWidth);
+		/* player setup: below the file selector setup, or on a page of its own */
+		onepage = plScrHeight >= (18 + 1 + FS_PLAYER_SETTINGS + 5);
+		if (!onepage && page)
+		{
+			for (i = 1; i <= 16; i++)
+			{
+				displayvoid (i, 0, plScrWidth);
+			}
+			playerrow = 1;
+		} else {
+			displayvoid (17, 0, plScrWidth);
+			playerrow = 18;
+		}
+		i = playerrow + 1 + FS_PLAYER_SETTINGS + 1; /* first row after the player setup */
+		if (onepage || page)
+		{
+			int j;
+			display_nprintf (playerrow, 0, 0x03, plScrWidth, "player setup (also in the setup: folder, changes apply to the next file)");
+			for (j = 0; j < FS_PLAYER_SETTINGS; j++)
+			{
+				fsPlayerSettingDraw (playerrow + 1 + j, fsPlayerSettings + j);
+			}
+			displayvoid (i - 1, 0, plScrWidth);
+		} else {
+			i = 18;
+		}
 
-		displaystr(18, 0, 0x07, "ALT-S (or CTRL-S if in X) to save current setup to ocp.ini", plScrWidth);
-		displaystr(plScrHeight-1, 0, 0x17, "  press the number of the item you wish to change and ESC when done", plScrWidth);
+		displaystr(i, 0, 0x07, "ALT-S (or CTRL-S if in X) to save current setup to ocp.ini", plScrWidth);
+		displaystr(plScrHeight-1, 0, 0x17, onepage ? "  press the number of the item you wish to change and ESC when done"
+		                                           : page ? "  press the letter of the item you wish to change, TAB for the file selector setup, ESC when done"
+		                                                  : "  press the number of the item you wish to change, TAB for the player setup, ESC when done", plScrWidth);
 
-		displaystr(19, 0, 0x03, (stored?"ocp.ini saved":""), plScrWidth);
+		displaystr(i + 1, 0, 0x03, (stored?"ocp.ini saved":""), plScrWidth);
 
-		for (i=20; i < plScrHeight; i++)
+		for (i += 2; i < (plScrHeight - 1); i++)
 		{
 			displayvoid (i, 0, plScrWidth);
+		}
+
+		if (pending >= 0)
+		{
+			fsPlayerSettingEdit (playerrow + 1 + pending, fsPlayerSettings + pending);
+			pending = -1;
+			continue;
 		}
 
 		if (InKeyboardHelp)
@@ -3513,8 +3666,42 @@ superbreak:
 
 		c = Console.KeyboardGetChar();
 
+		/* player setup */
+		{
+			int j;
+			for (j = 0; j < FS_PLAYER_SETTINGS; j++)
+			{
+				if ((c == fsPlayerSettings[j].key) || (c == fsPlayerSettings[j].key + 'a' - 'A'))
+				{
+					break;
+				}
+			}
+			if (j < FS_PLAYER_SETTINGS)
+			{
+				const struct fsPlayerSetting *p = fsPlayerSettings + j;
+				stored = 0;
+				if (p->type == PS_BOOL)
+				{
+					cfSetProfileBool (p->section, p->name, !fsPlayerSettingInt (p));
+				} else {
+					pending = j; /* edited once its page is drawn */
+				}
+				if (!onepage)
+				{
+					page = 1;
+				}
+				continue;
+			}
+		}
+
 		switch (c)
 		{
+			case KEY_TAB:
+				if (!onepage)
+				{
+					page = !page;
+				}
+				break;
 			case '1': stored = 0;
 			                      plDisplaySetupTextMode();
 			                      plScrType = Console.CurrentMode;
@@ -3615,6 +3802,16 @@ superbreak:
 				cpiKeyHelp('B', "Toggle option B");
 				cpiKeyHelp('C', "Toggle option C");
 				cpiKeyHelp('D', "Toggle option D");
+				cpiKeyHelp('e', "Edit the file-extensions to scan");
+				cpiKeyHelp('f', "Edit the start directory");
+				{
+					int j;
+					for (j = 0; j < FS_PLAYER_SETTINGS; j++)
+					{
+						cpiKeyHelp (fsPlayerSettings[j].key + 'a' - 'A', fsPlayerSettings[j].label);
+					}
+				}
+				cpiKeyHelp(KEY_TAB, "File selector setup / player setup");
 				cpiKeyHelp('+', "Increase FPS");
 				cpiKeyHelp('-', "Decrease FPS");
 				cpiKeyHelp(KEY_ALT_S, "Store settings to ocp.ini");

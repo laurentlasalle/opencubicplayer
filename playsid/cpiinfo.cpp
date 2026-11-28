@@ -222,7 +222,9 @@ static void SidInfoDraw (struct cpifaceSessionAPI_t *cpifaceSession, int focus)
 	{
 		cpifaceSession->console->Driver->DisplayStr(SidInfoFirstLine + line,  0, 0x07, " \xb3 ", 3);
 		cpifaceSession->console->Driver->DisplayStr(SidInfoFirstLine + line,  3, 0x0a, "Song Speed   : ", 15);
-		cpifaceSession->console->Driver->DisplayStr(SidInfoFirstLine + line, 18, 0x0f, sidTuneInfoClockSpeedString(), SidInfoWidth - 18 - 2);
+		/* yellow: the standard chosen with key R, in place of the one of the file */
+		const char *switched = sidSwitchedVideoString ();
+		cpifaceSession->console->Driver->DisplayStr(SidInfoFirstLine + line, 18, switched ? 0x0e : 0x0f, switched ? switched : sidTuneInfoClockSpeedString(), SidInfoWidth - 18 - 2);
 		cpifaceSession->console->Driver->DisplayStr(SidInfoFirstLine + line, SidInfoWidth - 2, 0x07, "\xb3", 1);
 	}
 	line++;

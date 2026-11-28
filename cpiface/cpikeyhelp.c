@@ -542,6 +542,7 @@ int cpiKeyHelpDisplay(void)
 			case _KEY_ENTER:
 			case KEY_ESC:
 			case KEY_ALT_K:
+			case KEY_EXIT: /* the window is closed: KEY_EXIT stays in the queue for the caller */
 				return 0;
 		}
 	}
