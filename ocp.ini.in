@@ -104,6 +104,8 @@
   rowframes=6             ; tracker view: frames (1/60 s) per row
 ; these settings can also be changed in setup:/gmeconfig.dev
 ; defaultlength= and fade= also apply to GSF and MINIGSF files (Game Boy Advance, played through mGBA)
+; trackerview= also applies to GSF and MINIGSF files that use the MP2K sound engine (most GBA games):
+; one column per track of the song, then the 4 Game Boy channels. The keys 1 to 0 mute the tracks
 ; loops= and fade= also apply to the audio streams of games played through vgmstream (GENH, ADX, BRSTM and others)
 
 [s98]                     ; S98 (PC-88/PC-98...) through libvgm

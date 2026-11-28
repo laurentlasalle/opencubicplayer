@@ -32,6 +32,8 @@ struct gsfemu_t
 	blip_t *left, *right;
 	uint32_t rate;
 	unsigned int speed;
+	void (*hook)(void *arg, struct gsfemu_t *e);
+	void *hookarg;
 };
 
 static void quiet_log (struct mLogger *logger, int category, enum mLogLevel level, const char *format, va_list args)
@@ -125,6 +127,10 @@ void gsfemu_render (struct gsfemu_t *e, int16_t *buf, unsigned int frames)
 		if (!avail)
 		{
 			e->core->runFrame (e->core);
+			if (e->hook)
+			{
+				e->hook (e->hookarg, e);
+			}
 			continue;
 		}
 		if ((unsigned int)avail > frames)
@@ -154,6 +160,34 @@ void gsfemu_mute (struct gsfemu_t *e, int channel, int mute)
 	{
 		e->core->enableAudioChannel (e->core, channel, !mute);
 	}
+}
+
+void gsfemu_frame (struct gsfemu_t *e)
+{
+	e->core->runFrame (e->core);
+	blip_clear (e->left);
+	blip_clear (e->right);
+}
+
+uint8_t gsfemu_read8 (struct gsfemu_t *e, uint32_t address)
+{
+	return e->core->busRead8 (e->core, address);
+}
+
+uint32_t gsfemu_read32 (struct gsfemu_t *e, uint32_t address)
+{
+	return e->core->busRead32 (e->core, address);
+}
+
+void gsfemu_write8 (struct gsfemu_t *e, uint32_t address, uint8_t value)
+{
+	e->core->busWrite8 (e->core, address, value);
+}
+
+void gsfemu_set_frame_hook (struct gsfemu_t *e, void (*hook)(void *arg, struct gsfemu_t *e), void *arg)
+{
+	e->hook = hook;
+	e->hookarg = arg;
 }
 
 const char *gsfemu_version (void)

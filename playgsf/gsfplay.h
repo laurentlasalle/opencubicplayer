@@ -24,6 +24,7 @@ OCP_INTERNAL int gsfIsLooped (void);
 OCP_INTERNAL void gsfRestart (void);
 OCP_INTERNAL void gsfGetInfo (struct gsfinfo_t *info);
 OCP_INTERNAL void gsfSetMute (struct cpifaceSessionAPI_t *cpifaceSession, int ch, int mute);
+OCP_INTERNAL int gsfChannelCount (void);
 
 /* info view (gsfinfo.c) */
 OCP_INTERNAL void gsfInfoInit (struct cpifaceSessionAPI_t *cpifaceSession);

@@ -27,6 +27,18 @@ OCP_INTERNAL void gsfemu_set_speed (struct gsfemu_t *e, unsigned int speed);
 
 OCP_INTERNAL void gsfemu_mute (struct gsfemu_t *e, int channel, int mute);
 
+/* the scout of the tracker view (gsfvis.c): runs one video frame, without sound */
+OCP_INTERNAL void gsfemu_frame (struct gsfemu_t *e);
+
+/* access to the memory of the Game Boy Advance (work RAM), to read the state of
+ * the sound engine of the program */
+OCP_INTERNAL uint8_t  gsfemu_read8  (struct gsfemu_t *e, uint32_t address);
+OCP_INTERNAL uint32_t gsfemu_read32 (struct gsfemu_t *e, uint32_t address);
+OCP_INTERNAL void     gsfemu_write8 (struct gsfemu_t *e, uint32_t address, uint8_t value);
+
+/* hook() is called after each video frame rendered by gsfemu_render() */
+OCP_INTERNAL void gsfemu_set_frame_hook (struct gsfemu_t *e, void (*hook)(void *arg, struct gsfemu_t *e), void *arg);
+
 /* version of mGBA, e.g. "0.10.5" */
 OCP_INTERNAL const char *gsfemu_version (void);
 

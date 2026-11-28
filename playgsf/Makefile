@@ -63,7 +63,9 @@ gsfplay.o: gsfplay.c \
 	../stuff/imsrtns.h \
 	gsfemu.h \
 	gsfload.h \
-	gsfplay.h
+	gsfplay.h \
+	gsfvis.h \
+	../playgme/nsfvis.h
 	$(CC) $< -o $@ -c
 
 gsfpplay.o: gsfpplay.c \
@@ -80,6 +82,7 @@ gsfpplay.o: gsfpplay.c \
 	../stuff/err.h \
 	../stuff/poutput.h \
 	../stuff/sets.h \
+	../playgme/gmeplay.h \
 	gsfemu.h \
 	gsfload.h \
 	gsfplay.h \
@@ -99,6 +102,28 @@ gsftype.o: gsftype.c \
 	gsftype.h
 	$(CC) $< -o $@ -c
 
-playgsf_so=gsfemu.o gsfinfo.o gsfload.o gsfplay.o gsfpplay.o gsftype.o
+gsfvis.o: gsfvis.c \
+	../config.h \
+	../types.h \
+	../playgme/nsfvis.h \
+	gsfemu.h \
+	gsfvis.h
+	$(CC) $< -o $@ -c
+
+# tracker view code shared with playgme
+gsfnsftrak.o: ../playgme/nsftrak.c \
+	../config.h \
+	../types.h \
+	../cpiface/cpiface.h \
+	../playgme/gmeplay.h \
+	../playgme/nsfvis.h \
+	../stuff/poutput.h
+	$(CC) $< -o $@ -c
+
+gsfnsfvis.o: ../playgme/nsfvis.c \
+	../playgme/nsfvis.h
+	$(CC) $(LIBGME_CFLAGS) $< -o $@ -c
+
+playgsf_so=gsfemu.o gsfinfo.o gsfload.o gsfplay.o gsfpplay.o gsftype.o gsfvis.o gsfnsftrak.o gsfnsfvis.o
 playgsf$(LIB_SUFFIX): $(playgsf_so)
 	$(CC) $(SHARED_FLAGS) $(LDFLAGS) -o $@ $^ $(MGBA_LIBS) -lz -lm $(if $(filter 1,$(WINDOWS)),-Wl$(comma)--exclude-all-symbols)

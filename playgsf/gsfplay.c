@@ -36,6 +36,8 @@
 #include "gsfemu.h"
 #include "gsfload.h"
 #include "gsfplay.h"
+#include "gsfvis.h"
+#include "../playgme/nsfvis.h"
 
 #define MAX_FILE (32 * 1024 * 1024 + 64 * 1024) /* largest GBA cartridge, compressed, with its tags */
 
@@ -67,6 +69,194 @@ static struct ringbuffer_t *gsfbufpos = 0;
 static uint32_t gsfbuffpos; /* read fine-pos.. */
 static uint32_t gsfbufrate; /* re-sampling rate.. fixed point 0x10000 => 1.0 */
 static uint32_t gsfRate;
+
+/* Tracker view (shared with playgme, see playgme/nsftrak.c and gsfvis.h): the scout
+ * runs a few seconds ahead of the audio. Emulated time t is mapped to output sample
+ * frames with vis_out0 + (t - vis_t0) * rate / speed. */
+#define VIS_RING 16384
+#define VIS_SLOTS 512
+#define VIS_LEAD_SECONDS 4
+static struct gsfvis_t *vis;
+static int vis_enabled;
+static const struct nsfvis_layout_t *vis_layout;
+static struct nsfvis_ch_t *vis_ring;
+static long vis_sample[VIS_RING];
+static double vis_time[VIS_RING];
+static long vis_first, vis_count;
+static long vis_outpos;                    /* sample frames rendered since the song (re)started */
+static volatile long vis_playpos;          /* sample frames heard */
+static volatile int vis_generation;
+static int vis_newdata;
+static int vis_rowframes = 6;
+static double vis_t0, vis_speed = 1.0;
+static long vis_out0;
+static unsigned int vis_commit_target;
+static const struct plrDevAPI_t *vis_plrDevAPI;
+static struct vis_slot_t { long pos; int generation; int busy; } vis_slots[VIS_SLOTS];
+static int vis_slot_next;
+static uint8_t track_muted[GSFVIS_MAXTRACKS];
+
+static long vis_stamp (double t)
+{
+	return vis_out0 + (long)((t - vis_t0) * gsfRate / vis_speed);
+}
+
+static void vis_emit (void *arg, double t, const struct nsfvis_ch_t *ch)
+{
+	long stamp = vis_stamp (t);
+	long idx;
+	if (vis_count == VIS_RING)
+	{
+		vis_first++;
+		vis_count--;
+	}
+	idx = (vis_first + vis_count) % VIS_RING;
+	memcpy (vis_ring + idx * vis_layout->count, ch, sizeof (*ch) * vis_layout->count);
+	vis_sample[idx] = stamp;
+	vis_time[idx] = t;
+	vis_count++;
+	vis_newdata = 1;
+}
+
+static void vis_song_restart (void)
+{
+	vis_generation++;
+	vis_first = vis_count = 0;
+	vis_outpos = 0;
+	vis_playpos = 0;
+	vis_t0 = 0.0;
+	vis_out0 = 0;
+	if (vis) gsfvis_reset (vis);
+}
+
+/* runs the scout up to VIS_LEAD_SECONDS ahead of what is rendered */
+static void vis_advance (void)
+{
+	if (vis_enabled)
+	{
+		gsfvis_run_until (vis, vis_t0 + (double)(vis_outpos + (long)VIS_LEAD_SECONDS * gsfRate - vis_out0) * vis_speed / gsfRate, vis_emit, 0);
+	}
+}
+
+static void vis_callback_from_devp (void *arg, int samples_ago)
+{
+	struct vis_slot_t *slot = arg;
+	if (slot->generation == vis_generation)
+	{
+		vis_playpos = slot->pos;
+	}
+	slot->busy = 0;
+}
+
+static void vis_callback_from_ringbuffer (void *arg, int samples_ago)
+{
+	struct vis_slot_t *slot = arg;
+	int samples_until = (int)vis_commit_target - (gsfbufrate ? (int)((int64_t)samples_ago * 65536 / gsfbufrate) : samples_ago);
+	if (samples_until < 0)
+	{
+		samples_until = 0;
+	}
+	if (vis_plrDevAPI && vis_plrDevAPI->OnBufferCallback)
+	{
+		vis_plrDevAPI->OnBufferCallback (-samples_until, vis_callback_from_devp, slot);
+	} else {
+		vis_callback_from_devp (arg, 0);
+	}
+}
+
+/* a change of speed: the frames the scout has run ahead get new positions */
+static void vis_set_speed (double speed)
+{
+	long i;
+	if (!vis_enabled || (speed == vis_speed))
+	{
+		vis_speed = speed;
+		return;
+	}
+	vis_t0 = vis_t0 + (double)(vis_outpos - vis_out0) * vis_speed / gsfRate;
+	vis_out0 = vis_outpos;
+	vis_speed = speed;
+	for (i = vis_first; i < vis_first + vis_count; i++)
+	{
+		long idx = i % VIS_RING;
+		if (vis_time[idx] > vis_t0)
+		{
+			vis_sample[idx] = vis_stamp (vis_time[idx]);
+		}
+	}
+}
+
+/* interface used by playgme/nsftrak.c */
+OCP_INTERNAL int gmeVisActive (void) { return vis_enabled; }
+OCP_INTERNAL const struct nsfvis_layout_t *gmeVisLayout (void) { return vis_layout; }
+OCP_INTERNAL int gmeVisRowFrames (void) { return vis_rowframes; }
+OCP_INTERNAL int gmeVisTakeNewData (void) { int r = vis_newdata; vis_newdata = 0; return r; }
+OCP_INTERNAL long gmeVisLastFrame (void) { return vis_first + vis_count - 1; }
+OCP_INTERNAL long gmeVisCurrentFrame (void)
+{
+	long lo = vis_first, hi = vis_first + vis_count - 1, best = -1, pos = vis_playpos;
+	while (lo <= hi)
+	{
+		long mid = lo + (hi - lo) / 2;
+		if (vis_sample[mid % VIS_RING] <= pos)
+		{
+			best = mid;
+			lo = mid + 1;
+		} else {
+			hi = mid - 1;
+		}
+	}
+	return best;
+}
+OCP_INTERNAL const struct nsfvis_ch_t *gmeVisFrame (long frame)
+{
+	if (!vis_ring || frame < vis_first || frame >= vis_first + vis_count)
+	{
+		return 0;
+	}
+	return vis_ring + (frame % VIS_RING) * vis_layout->count;
+}
+
+OCP_INTERNAL int gsfChannelCount (void)
+{
+	return vis_enabled ? vis_layout->count : GSFEMU_CHANNELS;
+}
+
+/* A track is muted through the volume that the program gives to it (volX, 64 =
+ * full), which the sequence itself never changes: the engine is asked to compute
+ * the volume of its voices again. This is done after each video frame of the
+ * emulator that is heard, since the engine sets volX again when a song starts.
+ * track_muted[]: 0 heard, 1 muted, 2 to be heard again. */
+static void mute_tracks (void *arg, struct gsfemu_t *e)
+{
+	uint32_t tracks = gsfemu_read32 (e, gsfvis_player (vis) + MP2K_PLAYER_TRACKS);
+	int i, busy = 0;
+	for (i = 0; i < gsfvis_tracks (vis); i++)
+	{
+		uint32_t t = tracks + i * MP2K_TRACK_SIZE;
+		uint8_t volx;
+		if (!track_muted[i])
+		{
+			continue;
+		}
+		volx = gsfemu_read8 (e, t + MP2K_TRACK_VOLX);
+		if ((track_muted[i] == 1) ? (volx != 0) : (volx == 0))
+		{
+			gsfemu_write8 (e, t + MP2K_TRACK_VOLX, (track_muted[i] == 1) ? 0 : 64);
+			gsfemu_write8 (e, t + MP2K_TRACK_FLAGS, gsfemu_read8 (e, t + MP2K_TRACK_FLAGS) | 0x03);
+		}
+		if (track_muted[i] == 2)
+		{
+			track_muted[i] = 0;
+		} else {
+			busy = 1;
+		}
+	}
+	if (!busy)
+	{
+		gsfemu_set_frame_hook (e, 0, 0); /* nothing is muted any more */
+	}
+}
 
 /* ---- libraries of MINIGSF files, read from the directory of the file ---- */
 
@@ -247,6 +437,17 @@ static void gsfIdler (struct cpifaceSessionAPI_t *cpifaceSession)
 		gsf_pos_ms += (double)length1 * 1000.0 * gsf_speed / 0x100 / gsfRate;
 
 		cpifaceSession->ringbufferAPI->head_add_samples (gsfbufpos, length1);
+		vis_outpos += length1;
+		if (vis_enabled)
+		{
+			struct vis_slot_t *slot = &vis_slots[vis_slot_next];
+			vis_advance ();
+			vis_slot_next = (vis_slot_next + 1) % VIS_SLOTS;
+			slot->busy = 1;
+			slot->pos = vis_outpos;
+			slot->generation = vis_generation;
+			cpifaceSession->ringbufferAPI->add_tail_callback_samples (gsfbufpos, 1, vis_callback_from_ringbuffer, slot);
+		}
 		cpifaceSession->ringbufferAPI->get_head_samples (gsfbufpos, &pos1, &length1, &pos2, &length2);
 	}
 }
@@ -424,6 +625,7 @@ OCP_INTERNAL void gsfIdle (struct cpifaceSessionAPI_t *cpifaceSession)
 					pos2 = 0;
 				} /* while (targetlength && length1) */
 			} /* if (gsfbufrate==0x10000) */
+			vis_commit_target = accumulated_target;
 			cpifaceSession->ringbufferAPI->tail_consume_samples (gsfbufpos, accumulated_source);
 			cpifaceSession->plrDevAPI->CommitBuffer (accumulated_target);
 		} /* if (targetlength) */
@@ -441,6 +643,7 @@ static void gsfSetSpeed (uint16_t sp)
 		sp = 16;
 	gsf_speed = sp;
 	gsfemu_set_speed (gsfsession, sp);
+	vis_set_speed ((double)sp / 256.0);
 }
 
 static void gsfSetPitch (uint16_t sp)
@@ -494,12 +697,25 @@ static int gsfGet (struct cpifaceSessionAPI_t *cpifaceSession, int ch, int opt)
 	return 0;
 }
 
+/* without the tracker view, the channels are those of the Game Boy Advance (see
+ * gsfemu.h); with it, the tracks of the song, then the 4 Game Boy channels */
 OCP_INTERNAL void gsfSetMute (struct cpifaceSessionAPI_t *cpifaceSession, int ch, int mute)
 {
 	cpifaceSession->MuteChannel[ch] = mute;
-	if (gsfsession)
+	if (!gsfsession)
+	{
+		return;
+	}
+	if (!vis_enabled)
 	{
 		gsfemu_mute (gsfsession, ch, mute);
+	} else if (vis_layout->voice[ch] >= 0x100)
+	{
+		int t = vis_layout->voice[ch] - 0x100;
+		track_muted[t] = mute ? 1 : (track_muted[t] ? 2 : 0);
+		gsfemu_set_frame_hook (gsfsession, mute_tracks, 0); /* removes itself when nothing is muted */
+	} else {
+		gsfemu_mute (gsfsession, vis_layout->voice[ch], mute);
 	}
 }
 
@@ -592,9 +808,9 @@ OCP_INTERNAL int gsfOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 	}
 
 	gsfsession = gsfemu_open (image.data, image.size, image.multiboot, gsfRate);
-	free (image.data);
 	if (!gsfsession)
 	{
+		free (image.data);
 		cpifaceSession->cpiDebug (cpifaceSession, "[GSF] mGBA failed to load the program\n");
 		cpifaceSession->plrDevAPI->Stop (cpifaceSession);
 		return errFormMiss;
@@ -607,6 +823,7 @@ OCP_INTERNAL int gsfOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 	gsfbuf = malloc(gsfbuflen <<  2 /* stereo + 16bit */);
 	if (!gsfbuf)
 	{
+		free (image.data);
 		cpifaceSession->plrDevAPI->Stop (cpifaceSession);
 		gsfemu_close (gsfsession);
 		gsfsession = 0;
@@ -616,6 +833,7 @@ OCP_INTERNAL int gsfOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 	gsfbufpos = cpifaceSession->ringbufferAPI->new_samples (RINGBUFFER_FLAGS_STEREO | RINGBUFFER_FLAGS_16BIT | RINGBUFFER_FLAGS_SIGNED, gsfbuflen);
 	if (!gsfbufpos)
 	{
+		free (image.data);
 		cpifaceSession->plrDevAPI->Stop (cpifaceSession);
 		free (gsfbuf);
 		gsfbuf = 0;
@@ -624,6 +842,28 @@ OCP_INTERNAL int gsfOpenPlayer (struct ocpfilehandle_t *file, struct cpifaceSess
 		return errAllocMem;
 	}
 	gsfbuffpos=0;
+
+	/* the tracker view: a scout, if the program uses the MP2K engine */
+	vis_plrDevAPI = cpifaceSession->plrDevAPI;
+	vis_speed = 1.0;
+	vis_enabled = 0;
+	memset (vis_slots, 0, sizeof (vis_slots));
+	memset (track_muted, 0, sizeof (track_muted));
+	vis_slot_next = 0;
+	vis_rowframes = cpifaceSession->configAPI->GetProfileInt ("gme", "rowframes", 6, 10);
+	if (vis_rowframes < 1) vis_rowframes = 1;
+	if (vis_rowframes > 32) vis_rowframes = 32;
+	vis = cpifaceSession->configAPI->GetProfileBool ("gme", "trackerview", 1, 1) ? gsfvis_open (image.data, image.size, image.multiboot) : 0;
+	if (vis)
+	{
+		vis_layout = gsfvis_layout (vis);
+		vis_ring = calloc ((size_t)VIS_RING * vis_layout->count, sizeof (struct nsfvis_ch_t));
+		vis_enabled = vis_ring != 0;
+		cpifaceSession->cpiDebug (cpifaceSession, "[GSF] MP2K sound engine, %d tracks: tracker view\n", gsfvis_tracks (vis));
+	}
+	free (image.data);
+	vis_song_restart ();
+	vis_advance ();
 
 	cpifaceSession->mcpSet = gsfSet;
 	cpifaceSession->mcpGet = gsfGet;
@@ -645,6 +885,14 @@ OCP_INTERNAL void gsfClosePlayer (struct cpifaceSessionAPI_t *cpifaceSession)
 		gsfemu_close (gsfsession);
 		gsfsession = 0;
 	}
+
+	vis_enabled = 0;
+	vis_generation++;
+	free (vis_ring);
+	vis_ring = 0;
+	vis_count = 0;
+	gsfvis_close (vis);
+	vis = 0;
 
 	if (gsfbufpos)
 	{
@@ -671,6 +919,7 @@ OCP_INTERNAL void gsfRestart (void)
 	if (gsfsession)
 	{
 		gsfemu_restart (gsfsession);
+		vis_song_restart ();
 		gsf_pos_ms = 0.0;
 		gsflooped = 0;
 	}

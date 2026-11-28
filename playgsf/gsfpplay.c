@@ -25,6 +25,7 @@
 #include "gsfemu.h"
 #include "gsfplay.h"
 #include "gsftype.h"
+#include "../playgme/gmeplay.h"
 
 OCP_INTERNAL const char *gsf_filename;
 static struct ocpfilehandle_t *gsf_file;
@@ -100,9 +101,16 @@ static int gsfOpenFile (struct cpifaceSessionAPI_t *cpifaceSession, struct modul
 
 	gsfInfoInit (cpifaceSession);
 
-	/* keys 1 to 6 mute the sound channels of the Game Boy Advance (see gsfemu.h) */
-	cpifaceSession->LogicalChannelCount = GSFEMU_CHANNELS;
+	/* the keys 1 to 0 mute the channels: the sound channels of the Game Boy Advance
+	 * (see gsfemu.h), or, with the tracker view, the tracks of the song then the 4
+	 * Game Boy channels (see gsfvis.h) */
+	cpifaceSession->LogicalChannelCount = gsfChannelCount ();
 	cpifaceSession->SetMuteChannel = gsfSetMute;
+	if (gmeVisActive ())
+	{
+		cpifaceSession->TrackSetup2 (cpifaceSession, &gmeTrakDisplay, GME_TRAK_PATTERNS, gsfChannelCount ());
+		cpifaceSession->TrackStretch (cpifaceSession, 1);
+	}
 
 	cpifaceSession->InPause = 0;
 
